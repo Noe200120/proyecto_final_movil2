@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../utils/app_colors.dart';
 import 'home_view.dart';
@@ -60,8 +61,96 @@ class _LoginViewState extends State<LoginView> {
         message = e.message!;
       }
 
+      _showError('Error de acceso', message);
+    } catch (_) {
+      _showError('Error', 'No se pudo completar el inicio de sesión');
+    } finally {
+      _stopLoading();
+    }
+  }
+
+  Future<void> _registerWithEmail() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+      );
+
       Get.snackbar(
-        'Error de acceso',
+        'Cuenta creada',
+        'Tu cuenta fue registrada correctamente',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green.shade700,
+        colorText: Colors.white,
+        margin: const EdgeInsets.all(16),
+      );
+
+      Get.offAll(() => const HomeView());
+    } on FirebaseAuthException catch (e) {
+      String message = 'No se pudo crear la cuenta';
+
+      if (e.code == 'weak-password') {
+        message = 'La contraseña es demasiado débil';
+      } else if (e.code == 'email-already-in-use') {
+        message = 'Ese correo ya está registrado';
+      } else if (e.code == 'invalid-email') {
+        message = 'El correo no es válido';
+      } else if (e.code == 'network-request-failed') {
+        message = 'Error de red. Revisa tu conexión';
+      } else if (e.message != null && e.message!.isNotEmpty) {
+        message = e.message!;
+      }
+
+      _showError('Error de registro', message);
+    } catch (_) {
+      _showError('Error', 'No se pudo completar el registro');
+    } finally {
+      _stopLoading();
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      await GoogleSignIn.instance.initialize();
+
+      final GoogleSignInAccount googleUser =
+          await GoogleSignIn.instance.authenticate();
+
+      final GoogleSignInAuthentication googleAuth =
+          googleUser.authentication;
+
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+
+      await FirebaseAuth.instance.signInWithCredential(credential);
+
+      Get.offAll(() => const HomeView());
+    } on FirebaseAuthException catch (e) {
+      String message = 'No se pudo iniciar sesión con Google';
+
+      if (e.code == 'account-exists-with-different-credential') {
+        message = 'Ya existe una cuenta con ese correo y otro método de acceso';
+      } else if (e.code == 'invalid-credential') {
+        message = 'La credencial de Google no es válida';
+      } else if (e.code == 'network-request-failed') {
+        message = 'Error de red. Revisa tu conexión';
+      } else if (e.message != null && e.message!.isNotEmpty) {
+        message = e.message!;
+      }
+
+      Get.snackbar(
+        'Error con Google',
         message,
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red.shade700,
@@ -71,7 +160,7 @@ class _LoginViewState extends State<LoginView> {
     } catch (e) {
       Get.snackbar(
         'Error',
-        'No se pudo completar el inicio de sesión',
+        'Ocurrió un problema al autenticar con Google',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red.shade700,
         colorText: Colors.white,
@@ -83,6 +172,25 @@ class _LoginViewState extends State<LoginView> {
           isLoading = false;
         });
       }
+    }
+  }
+
+  void _showError(String title, String message) {
+    Get.snackbar(
+      title,
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.red.shade700,
+      colorText: Colors.white,
+      margin: const EdgeInsets.all(16),
+    );
+  }
+
+  void _stopLoading() {
+    if (mounted) {
+      setState(() {
+        isLoading = false;
+      });
     }
   }
 
@@ -162,7 +270,9 @@ class _LoginViewState extends State<LoginView> {
                             TextFormField(
                               controller: emailController,
                               keyboardType: TextInputType.emailAddress,
-                              style: const TextStyle(color: AppColors.textPrimary),
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                              ),
                               decoration: _inputDecoration(
                                 label: 'Correo electronico',
                                 icon: Icons.mail_outline_rounded,
@@ -181,7 +291,9 @@ class _LoginViewState extends State<LoginView> {
                             TextFormField(
                               controller: passwordController,
                               obscureText: hidePassword,
-                              style: const TextStyle(color: AppColors.textPrimary),
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                              ),
                               decoration: _inputDecoration(
                                 label: 'Contraseña',
                                 icon: Icons.lock_outline_rounded,
@@ -234,9 +346,64 @@ class _LoginViewState extends State<LoginView> {
                                       ),
                               ),
                             ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 54,
+                                    child: ElevatedButton(
+                                      onPressed: isLoading
+                                          ? null
+                                          : _registerWithEmail,
+                                      child: isLoading
+                                          ? const SizedBox(
+                                              width: 22,
+                                              height: 22,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.4,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.mail_outline_rounded,
+                                              color: Colors.white,
+                                              size: 28,
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 54,
+                                    child: ElevatedButton(
+                                      onPressed: isLoading
+                                          ? null
+                                          : _signInWithGoogle,
+                                      child: isLoading
+                                          ? const SizedBox(
+                                              width: 22,
+                                              height: 22,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.4,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.g_mobiledata_rounded,
+                                              color: Colors.white,
+                                              size: 28,
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                             const SizedBox(height: 13),
                             const Text(
-                              'Ingresa con tu cuenta registrada en Firebase.',
+                              'Opciones de Registro e inicio de sesión',
+                              textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 12,
