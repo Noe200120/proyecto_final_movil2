@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'components/utils/app_colors.dart';
 import 'components/games/views/login_view.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'components/games/controllers/favorites_controller.dart';
 import 'firebase_options.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  Get.put<FavoritesController>(FavoritesController(), permanent: true);
+
   runApp(const ClubGamingApp());
 }
 
@@ -46,24 +49,22 @@ class ClubGamingApp extends StatelessWidget {
         navigationBarTheme: NavigationBarThemeData(
           backgroundColor: AppColors.surface,
           indicatorColor: AppColors.primary.withOpacity(0.20),
-          labelTextStyle: MaterialStateProperty.resolveWith(
-            (states) => TextStyle(
-              color: states.contains(MaterialState.selected)
-                  ? AppColors.textPrimary
-                  : AppColors.textSecondary,
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            final bool selected = states.contains(WidgetState.selected);
+
+            return TextStyle(
+              color: selected ? AppColors.textPrimary : AppColors.textSecondary,
               fontSize: 11,
-              fontWeight: states.contains(MaterialState.selected)
-                  ? FontWeight.w800
-                  : FontWeight.w500,
-            ),
-          ),
-          iconTheme: MaterialStateProperty.resolveWith(
-            (states) => IconThemeData(
-              color: states.contains(MaterialState.selected)
-                  ? AppColors.primary
-                  : AppColors.textSecondary,
-            ),
-          ),
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+            );
+          }),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            final bool selected = states.contains(WidgetState.selected);
+
+            return IconThemeData(
+              color: selected ? AppColors.primary : AppColors.textSecondary,
+            );
+          }),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
@@ -81,10 +82,7 @@ class ClubGamingApp extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(
-              color: AppColors.primary,
-              width: 1.4,
-            ),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
           ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(

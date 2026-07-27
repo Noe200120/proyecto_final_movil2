@@ -63,7 +63,7 @@ class _LoginViewState extends State<LoginView> {
 
       _showError('Error de acceso', message);
     } catch (_) {
-      _showError('Error', 'No se pudo completar el inicio de sesión');
+      _showError('Error', 'No se pudo completar el inicio de sesion');
     } finally {
       _stopLoading();
     }

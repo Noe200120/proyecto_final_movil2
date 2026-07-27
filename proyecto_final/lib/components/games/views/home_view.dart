@@ -16,20 +16,24 @@ class HomeView extends StatefulWidget {
 class _HomeViewState extends State<HomeView> {
   int currentIndex = 0;
 
-  final List<Widget> views = const [
-    DiscoverView(),
-    SearchView(),
-    FavoritesView(),
-    ProfileView(),
-  ];
+  late final List<Widget> views;
+
+  @override
+  void initState() {
+    super.initState();
+
+    views = [
+      DiscoverView(),
+      SearchView(),
+      FavoritesView(),
+      const ProfileView(),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: currentIndex,
-        children: views,
-      ),
+      body: IndexedStack(index: currentIndex, children: views),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: AppColors.surface,
@@ -38,7 +42,9 @@ class _HomeViewState extends State<HomeView> {
         child: NavigationBar(
           selectedIndex: currentIndex,
           onDestinationSelected: (index) {
-            setState(() => currentIndex = index);
+            setState(() {
+              currentIndex = index;
+            });
           },
           destinations: const [
             NavigationDestination(
