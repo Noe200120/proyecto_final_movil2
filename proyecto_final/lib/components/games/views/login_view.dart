@@ -63,7 +63,7 @@ class _LoginViewState extends State<LoginView> {
 
       _showError('Error de acceso', message);
     } catch (_) {
-      _showError('Error', 'No se pudo completar el inicio de sesion');
+      _showError('Error', 'No se pudo completar el inicio de sesión');
     } finally {
       _stopLoading();
     }
@@ -115,6 +115,61 @@ class _LoginViewState extends State<LoginView> {
     }
   }
 
+  Future<void> _resetPassword() async {
+    final email = emailController.text.trim();
+
+    if (email.isEmpty) {
+      _showError(
+        'Correo requerido',
+        'Ingresa tu correo para recuperar la contraseña',
+      );
+      return;
+    }
+
+    if (!GetUtils.isEmail(email)) {
+      _showError('Correo no válido', 'Ingresa un correo electrónico válido');
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+
+      Get.snackbar(
+        'Recuperación enviada',
+        'Te enviamos un enlace para restablecer tu contraseña',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green.shade700,
+        colorText: Colors.white,
+        margin: const EdgeInsets.all(16),
+      );
+    } on FirebaseAuthException catch (e) {
+      String message = 'No se pudo enviar el correo de recuperación';
+
+      if (e.code == 'user-not-found') {
+        message = 'No existe un usuario con ese correo';
+      } else if (e.code == 'invalid-email') {
+        message = 'El correo no es válido';
+      } else if (e.code == 'network-request-failed') {
+        message = 'Error de red. Revisa tu conexión';
+      } else if (e.message != null && e.message!.isNotEmpty) {
+        message = e.message!;
+      }
+
+      _showError('Error al recuperar contraseña', message);
+    } catch (_) {
+      _showError(
+        'Error',
+        'Ocurrió un problema al enviar el correo de recuperación',
+      );
+    } finally {
+      _stopLoading();
+    }
+  }
+
   Future<void> _signInWithGoogle() async {
     setState(() {
       isLoading = true;
@@ -149,29 +204,11 @@ class _LoginViewState extends State<LoginView> {
         message = e.message!;
       }
 
-      Get.snackbar(
-        'Error con Google',
-        message,
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.shade700,
-        colorText: Colors.white,
-        margin: const EdgeInsets.all(16),
-      );
+      _showError('Error con Google', message);
     } catch (e) {
-      Get.snackbar(
-        'Error',
-        'Ocurrió un problema al autenticar con Google',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.shade700,
-        colorText: Colors.white,
-        margin: const EdgeInsets.all(16),
-      );
+      _showError('Error', 'Ocurrió un problema al autenticar con Google');
     } finally {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
+      _stopLoading();
     }
   }
 
@@ -274,7 +311,7 @@ class _LoginViewState extends State<LoginView> {
                                 color: AppColors.textPrimary,
                               ),
                               decoration: _inputDecoration(
-                                label: 'Correo electronico',
+                                label: 'Correo electrónico',
                                 icon: Icons.mail_outline_rounded,
                               ),
                               validator: (value) {
@@ -322,7 +359,21 @@ class _LoginViewState extends State<LoginView> {
                                 return null;
                               },
                             ),
-                            const SizedBox(height: 22),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: isLoading ? null : _resetPassword,
+                                child: const Text(
+                                  '¿Olvidaste tu contraseña?',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
                             SizedBox(
                               width: double.infinity,
                               height: 54,
@@ -402,7 +453,7 @@ class _LoginViewState extends State<LoginView> {
                             ),
                             const SizedBox(height: 13),
                             const Text(
-                              'Opciones de Registro e inicio de sesión',
+                              'Opciones de registro e inicio de sesión',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: AppColors.textSecondary,
