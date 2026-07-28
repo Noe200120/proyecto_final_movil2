@@ -500,10 +500,6 @@ class GameDetailView extends StatelessWidget {
               ),
             );
           }),
-          const Text(
-            'RAWG no proporciona precios directos.',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
-          ),
         ],
       ),
     );

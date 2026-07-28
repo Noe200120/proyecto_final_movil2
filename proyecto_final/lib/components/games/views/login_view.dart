@@ -178,11 +178,10 @@ class _LoginViewState extends State<LoginView> {
     try {
       await GoogleSignIn.instance.initialize();
 
-      final GoogleSignInAccount googleUser =
-          await GoogleSignIn.instance.authenticate();
+      final GoogleSignInAccount googleUser = await GoogleSignIn.instance
+          .authenticate();
 
-      final GoogleSignInAuthentication googleAuth =
-          googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
 
       final credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
@@ -331,24 +330,25 @@ class _LoginViewState extends State<LoginView> {
                               style: const TextStyle(
                                 color: AppColors.textPrimary,
                               ),
-                              decoration: _inputDecoration(
-                                label: 'Contraseña',
-                                icon: Icons.lock_outline_rounded,
-                              ).copyWith(
-                                suffixIcon: IconButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      hidePassword = !hidePassword;
-                                    });
-                                  },
-                                  icon: Icon(
-                                    hidePassword
-                                        ? Icons.visibility_off_outlined
-                                        : Icons.visibility_outlined,
-                                    color: AppColors.textSecondary,
+                              decoration:
+                                  _inputDecoration(
+                                    label: 'Contraseña',
+                                    icon: Icons.lock_outline_rounded,
+                                  ).copyWith(
+                                    suffixIcon: IconButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          hidePassword = !hidePassword;
+                                        });
+                                      },
+                                      icon: Icon(
+                                        hidePassword
+                                            ? Icons.visibility_off_outlined
+                                            : Icons.visibility_outlined,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
                               validator: (value) {
                                 if (value == null || value.isEmpty) {
                                   return 'Ingresa tu contraseña';
@@ -478,9 +478,6 @@ class _LoginViewState extends State<LoginView> {
     required String label,
     required IconData icon,
   }) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon),
-    );
+    return InputDecoration(labelText: label, prefixIcon: Icon(icon));
   }
 }

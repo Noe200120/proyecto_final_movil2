@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../shared/design_placeholder.dart';
-import '../../shared/platform_chip.dart';
 import '../../utils/app_colors.dart';
 import '../controllers/rawg_games_controller.dart';
 import '../models/modelo.dart';
@@ -12,6 +11,9 @@ class DiscoverView extends StatelessWidget {
   DiscoverView({super.key});
 
   final RawgGamesController controller = Get.put(RawgGamesController());
+
+  // Permite mostrar "Seleccionar plataforma" al inicio.
+  final RxBool platformWasSelected = false.obs;
 
   @override
   Widget build(BuildContext context) {
@@ -41,10 +43,18 @@ class DiscoverView extends StatelessWidget {
                   }),
                 ),
               ),
-              SliverToBoxAdapter(child: _buildPlatformFilters()),
+
+              // Selector compacto de plataforma
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                  child: _buildPlatformSelector(context),
+                ),
+              ),
+
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
                   child: Obx(() {
                     final bool loading = controller.isLoading.value;
 
@@ -181,31 +191,237 @@ class DiscoverView extends StatelessWidget {
     );
   }
 
-  Widget _buildPlatformFilters() {
-    return SizedBox(
-      height: 76,
-      child: Obx(() {
-        final int selectedIndex = controller.selectedPlatform.value;
+  Widget _buildPlatformSelector(BuildContext context) {
+    return Obx(() {
+      final int selectedIndex = controller.selectedPlatform.value;
 
-        return ListView.separated(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          scrollDirection: Axis.horizontal,
-          itemCount: RawgGamesController.platforms.length,
-          separatorBuilder: (_, __) {
-            return const SizedBox(width: 10);
-          },
-          itemBuilder: (context, index) {
-            return PlatformChip(
-              label: RawgGamesController.platforms[index],
-              selected: selectedIndex == index,
-              onTap: () {
-                controller.selectPlatform(index);
-              },
-            );
-          },
+      final String selectedPlatform =
+          RawgGamesController.platforms[selectedIndex];
+
+      final bool hasSelected = platformWasSelected.value;
+
+      final String visibleText = hasSelected
+          ? selectedPlatform
+          : 'Seleccionar plataforma';
+
+      return Align(
+        alignment: Alignment.center,
+        child: FractionallySizedBox(
+          widthFactor: 0.78,
+          child: InkWell(
+            onTap: () {
+              _showPlatformOptions(context);
+            },
+            borderRadius: BorderRadius.circular(17),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(17),
+                border: Border.all(
+                  color: hasSelected
+                      ? AppColors.primary.withOpacity(0.45)
+                      : Colors.white.withOpacity(0.08),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 39,
+                    height: 39,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.14),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      hasSelected
+                          ? _platformIcon(selectedPlatform)
+                          : Icons.sports_esports_rounded,
+                      color: AppColors.primary,
+                      size: 21,
+                    ),
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Text(
+                      visibleText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: hasSelected
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 31,
+                    height: 31,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.textSecondary,
+                      size: 22,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  void _showPlatformOptions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (BuildContext bottomSheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Seleccionar plataforma',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                const Text(
+                  'Selecciona la plataforma de los juegos que deseas ver.',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                ...List.generate(RawgGamesController.platforms.length, (
+                  int index,
+                ) {
+                  final String platform = RawgGamesController.platforms[index];
+
+                  return Obx(() {
+                    final bool selected =
+                        platformWasSelected.value &&
+                        controller.selectedPlatform.value == index;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 9),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? AppColors.primary.withOpacity(0.14)
+                            : AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: selected
+                              ? AppColors.primary.withOpacity(0.55)
+                              : Colors.white10,
+                        ),
+                      ),
+                      child: ListTile(
+                        onTap: () {
+                          platformWasSelected.value = true;
+
+                          controller.selectPlatform(index);
+
+                          Navigator.pop(bottomSheetContext);
+                        },
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 4,
+                        ),
+                        leading: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? AppColors.primary.withOpacity(0.20)
+                                : AppColors.surface,
+                            borderRadius: BorderRadius.circular(13),
+                          ),
+                          child: Icon(
+                            _platformIcon(platform),
+                            color: selected
+                                ? AppColors.primary
+                                : AppColors.textSecondary,
+                            size: 22,
+                          ),
+                        ),
+                        title: Text(
+                          platform,
+                          style: TextStyle(
+                            color: selected
+                                ? AppColors.primary
+                                : AppColors.textPrimary,
+                            fontWeight: selected
+                                ? FontWeight.w900
+                                : FontWeight.w700,
+                          ),
+                        ),
+                        trailing: selected
+                            ? const Icon(
+                                Icons.check_circle_rounded,
+                                color: AppColors.primary,
+                              )
+                            : const Icon(
+                                Icons.chevron_right_rounded,
+                                color: AppColors.textSecondary,
+                              ),
+                      ),
+                    );
+                  });
+                }),
+              ],
+            ),
+          ),
         );
-      }),
+      },
     );
+  }
+
+  IconData _platformIcon(String platform) {
+    switch (platform.toLowerCase()) {
+      case 'pc':
+        return Icons.computer_rounded;
+
+      case 'playstation':
+        return Icons.sports_esports_rounded;
+
+      case 'xbox':
+        return Icons.gamepad_rounded;
+
+      case 'nintendo':
+        return Icons.videogame_asset_rounded;
+
+      default:
+        return Icons.apps_rounded;
+    }
   }
 
   Widget _buildCatalog({
@@ -257,7 +473,7 @@ class DiscoverView extends StatelessWidget {
           child: DesignPlaceholder(
             icon: Icons.search_off_rounded,
             title: 'Sin resultados',
-            message: 'No hay juegos disponibles.',
+            message: 'No hay juegos disponibles para esta plataforma.',
           ),
         ),
       );
@@ -266,7 +482,7 @@ class DiscoverView extends StatelessWidget {
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 22),
       sliver: SliverGrid(
-        delegate: SliverChildBuilderDelegate((context, index) {
+        delegate: SliverChildBuilderDelegate((BuildContext context, int index) {
           return _buildGameCard(games[index]);
         }, childCount: games.length),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -289,7 +505,7 @@ class DiscoverView extends StatelessWidget {
           onTap: controller.previousPage,
         ),
         const SizedBox(width: 4),
-        ...List.generate(RawgGamesController.totalPages, (index) {
+        ...List.generate(RawgGamesController.totalPages, (int index) {
           final int page = index + 1;
 
           return Padding(

@@ -29,9 +29,7 @@ class FavoritesView extends StatelessWidget {
               onPressed: () {
                 _showClearDialog(context);
               },
-              icon: const Icon(
-                Icons.delete_sweep_outlined,
-              ),
+              icon: const Icon(Icons.delete_sweep_outlined),
               tooltip: 'Eliminar todos',
             );
           }),
@@ -40,17 +38,11 @@ class FavoritesView extends StatelessWidget {
       body: SafeArea(
         top: false,
         child: Obx(() {
-          final List<GameModel> favorites =
-              controller.favoriteGames.toList();
+          final List<GameModel> favorites = controller.favoriteGames.toList();
 
           if (favorites.isEmpty) {
             return const Padding(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                18,
-                20,
-                26,
-              ),
+              padding: EdgeInsets.fromLTRB(20, 18, 20, 26),
               child: Center(
                 child: DesignPlaceholder(
                   icon: Icons.favorite_border_rounded,
@@ -64,17 +56,9 @@ class FavoritesView extends StatelessWidget {
 
           return ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              20,
-              18,
-              20,
-              30,
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
             itemCount: favorites.length,
-            itemBuilder: (
-              BuildContext context,
-              int index,
-            ) {
+            itemBuilder: (BuildContext context, int index) {
               final GameModel game = favorites[index];
 
               return _buildFavoriteCard(game);
@@ -87,15 +71,11 @@ class FavoritesView extends StatelessWidget {
 
   Widget _buildFavoriteCard(GameModel game) {
     return Container(
-      margin: const EdgeInsets.only(
-        bottom: 14,
-      ),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.06),
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.16),
@@ -106,11 +86,7 @@ class FavoritesView extends StatelessWidget {
       ),
       child: InkWell(
         onTap: () {
-          Get.to(
-            () => GameDetailView(
-              game: game,
-            ),
-          );
+          Get.to(() => GameDetailView(game: game));
         },
         borderRadius: BorderRadius.circular(20),
         child: Padding(
@@ -122,20 +98,21 @@ class FavoritesView extends StatelessWidget {
                 borderRadius: BorderRadius.circular(15),
                 child: SizedBox(
                   width: 105,
-                  height: 145,
+                  height: 160,
                   child: game.backgroundImage.isNotEmpty
                       ? Image.network(
                           game.backgroundImage,
                           width: 105,
-                          height: 145,
+                          height: 160,
                           fit: BoxFit.cover,
-                          errorBuilder: (
-                            context,
-                            error,
-                            stackTrace,
-                          ) {
-                            return _buildImagePlaceholder();
-                          },
+                          errorBuilder:
+                              (
+                                BuildContext context,
+                                Object error,
+                                StackTrace? stackTrace,
+                              ) {
+                                return _buildImagePlaceholder();
+                              },
                         )
                       : _buildImagePlaceholder(),
                 ),
@@ -143,10 +120,9 @@ class FavoritesView extends StatelessWidget {
               const SizedBox(width: 14),
               Expanded(
                 child: SizedBox(
-                  height: 145,
+                  height: 160,
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         game.name,
@@ -155,10 +131,11 @@ class FavoritesView extends StatelessWidget {
                         style: const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 17,
+                          height: 1.15,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 7),
                       Row(
                         children: [
                           const Icon(
@@ -171,16 +148,15 @@ class FavoritesView extends StatelessWidget {
                             game.rating.toStringAsFixed(1),
                             style: const TextStyle(
                               color: AppColors.textPrimary,
+                              fontSize: 13,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 6),
                       Text(
-                        game.released.isNotEmpty
-                            ? game.released
-                            : 'Sin fecha',
+                        game.released.isNotEmpty ? game.released : 'Sin fecha',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -188,19 +164,31 @@ class FavoritesView extends StatelessWidget {
                           fontSize: 11,
                         ),
                       ),
-                      const SizedBox(height: 5),
-                      Text(
-                        game.platforms.isNotEmpty
-                            ? game.platforms
-                                .take(2)
-                                .join(' - ')
-                            : 'Sin plataforma',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                      const SizedBox(height: 7),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 190),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Text(
+                            game.platforms.isNotEmpty
+                                ? game.platforms.take(2).join(' - ')
+                                : 'Sin plataforma',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
                       ),
                       const Spacer(),
@@ -226,17 +214,14 @@ class FavoritesView extends StatelessWidget {
                             child: IconButton(
                               padding: EdgeInsets.zero,
                               onPressed: () {
-                                controller.removeFavorite(
-                                  game.id,
-                                );
+                                controller.removeFavorite(game.id);
                               },
                               icon: const Icon(
                                 Icons.favorite_rounded,
                                 color: Colors.redAccent,
                                 size: 24,
                               ),
-                              tooltip:
-                                  'Eliminar de favoritos',
+                              tooltip: 'Eliminar de favoritos',
                             ),
                           ),
                         ],
@@ -255,7 +240,7 @@ class FavoritesView extends StatelessWidget {
   Widget _buildImagePlaceholder() {
     return Container(
       width: 105,
-      height: 145,
+      height: 160,
       color: AppColors.surfaceLight,
       alignment: Alignment.center,
       child: const Icon(
@@ -271,9 +256,7 @@ class FavoritesView extends StatelessWidget {
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: const Text(
-            'Eliminar favoritos',
-          ),
+          title: const Text('Eliminar favoritos'),
           content: const Text(
             'Deseas eliminar todos los videojuegos favoritos?',
           ),
@@ -282,9 +265,7 @@ class FavoritesView extends StatelessWidget {
               onPressed: () {
                 Navigator.pop(dialogContext);
               },
-              child: const Text(
-                'Cancelar',
-              ),
+              child: const Text('Cancelar'),
             ),
             FilledButton(
               onPressed: () {
@@ -292,9 +273,7 @@ class FavoritesView extends StatelessWidget {
 
                 Navigator.pop(dialogContext);
               },
-              child: const Text(
-                'Eliminar todos',
-              ),
+              child: const Text('Eliminar todos'),
             ),
           ],
         );
