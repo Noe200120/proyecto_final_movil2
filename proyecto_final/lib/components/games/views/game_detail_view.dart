@@ -161,24 +161,28 @@ class GameDetailView extends StatelessWidget {
                 platform: 'PC',
                 available: controller.hasPlatform('PC'),
                 stores: _storesForPlatform('PC'),
+                price: controller.simulatedPriceForPlatform('PC'),
               ),
               _PlatformPriceDesign(
                 icon: Icons.sports_esports_rounded,
                 platform: 'PlayStation',
                 available: controller.hasPlatform('PlayStation'),
                 stores: _storesForPlatform('PlayStation'),
+                price: controller.simulatedPriceForPlatform('PlayStation'),
               ),
               _PlatformPriceDesign(
                 icon: Icons.gamepad_rounded,
                 platform: 'Xbox',
                 available: controller.hasPlatform('Xbox'),
                 stores: _storesForPlatform('Xbox'),
+                price: controller.simulatedPriceForPlatform('Xbox'),
               ),
               _PlatformPriceDesign(
                 icon: Icons.videogame_asset_rounded,
                 platform: 'Nintendo',
                 available: controller.hasPlatform('Nintendo'),
                 stores: _storesForPlatform('Nintendo'),
+                price: controller.simulatedPriceForPlatform('Nintendo'),
               ),
               if (controller.stores.isNotEmpty) ...[
                 const SizedBox(height: 14),
@@ -407,6 +411,10 @@ class GameDetailView extends StatelessWidget {
             final String name = store['name']?.toString() ?? 'Tienda';
             final String domain = store['domain']?.toString() ?? '';
 
+            final double? price = store['price'] is num
+                ? (store['price'] as num).toDouble()
+                : null;
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Row(
@@ -418,26 +426,37 @@ class GameDetailView extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      name,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (domain.isNotEmpty)
+                          Text(
+                            domain,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  if (domain.isNotEmpty)
-                    Flexible(
-                      child: Text(
-                        domain,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 11,
-                        ),
-                      ),
+                  Text(
+                    price != null ? '\$${price.toStringAsFixed(2)}' : 'N/A',
+                    style: const TextStyle(
+                      color: AppColors.secondary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
                     ),
+                  ),
                 ],
               ),
             );
@@ -871,12 +890,14 @@ class _PlatformPriceDesign extends StatelessWidget {
     required this.platform,
     required this.available,
     required this.stores,
+    required this.price,
   });
 
   final IconData icon;
   final String platform;
   final bool available;
   final String stores;
+  final double? price;
 
   @override
   Widget build(BuildContext context) {
@@ -930,7 +951,9 @@ class _PlatformPriceDesign extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                available ? '--' : 'N/A',
+                available && price != null
+                    ? '\$${price!.toStringAsFixed(2)}'
+                    : 'N/A',
                 style: TextStyle(
                   color: available
                       ? AppColors.secondary
