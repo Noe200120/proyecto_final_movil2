@@ -1,7 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../shared/firestore_service.dart';
 import '../../shared/request_handler.dart';
+import '../models/game_comment_model.dart';
 import '../models/modelo.dart';
 import 'favorites_controller.dart';
 
@@ -11,11 +14,14 @@ class GameDetailController extends GetxController {
   final GameModel game;
 
   final RequestHandler requestHandler = RequestHandler();
+  final FirestoreService _firestoreService = Get.put(FirestoreService());
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   final FavoritesController favoritesController =
       Get.find<FavoritesController>();
 
   final RxBool isLoading = false.obs;
+  final RxBool isSubmittingComment = false.obs; // Prevención de doble clic
   final RxString errorMessage = ''.obs;
 
   final RxMap<String, dynamic> detail = <String, dynamic>{}.obs;
@@ -23,12 +29,12 @@ class GameDetailController extends GetxController {
   final RxBool isFavorite = false.obs;
 
   final RxDouble userRating = 0.0.obs;
-  final RxDouble graphicsRating = 0.0.obs;
-  final RxDouble gameplayRating = 0.0.obs;
-  final RxDouble storyRating = 0.0.obs;
-  final RxDouble innovationRating = 0.0.obs;
+  final RxDouble graphicsRating = 5.0.obs;
+  final RxDouble gameplayRating = 5.0.obs;
+  final RxDouble storyRating = 5.0.obs;
+  final RxDouble innovationRating = 5.0.obs;
 
-  final RxList<Map<String, dynamic>> comments = <Map<String, dynamic>>[].obs;
+  final RxList<GameCommentModel> comments = <GameCommentModel>[].obs;
 
   final TextEditingController commentController = TextEditingController();
 
@@ -38,6 +44,57 @@ class GameDetailController extends GetxController {
 
     updateFavoriteStatus();
     loadGameDetail();
+    _listenToComments();
+  }
+
+  /// comentarios en tiempo real desde firestore
+  void _listenToComments() {
+    comments.bindStream(_firestoreService.getCommentsStream(game.id));
+  }
+
+  /// Total de evaluaciones realizadas por la comunidad para este juego
+  int get communityReviewsCount => comments.length;
+
+  /// Promedio de Gráficos
+  double get averageGraphicsRating {
+    if (comments.isEmpty) return 0.0;
+    final double total =
+        comments.fold<double>(0.0, (sum, c) => sum + c.graphicsRating);
+    return total / comments.length;
+  }
+
+  /// Promedio de Jugabilidad 
+  double get averageGameplayRating {
+    if (comments.isEmpty) return 0.0;
+    final double total =
+        comments.fold<double>(0.0, (sum, c) => sum + c.gameplayRating);
+    return total / comments.length;
+  }
+
+  /// Promedio de Historia
+  double get averageStoryRating {
+    if (comments.isEmpty) return 0.0;
+    final double total =
+        comments.fold<double>(0.0, (sum, c) => sum + c.storyRating);
+    return total / comments.length;
+  }
+
+  /// Promedio de Innovación 
+  double get averageInnovationRating {
+    if (comments.isEmpty) return 0.0;
+    final double total =
+        comments.fold<double>(0.0, (sum, c) => sum + c.innovationRating);
+    return total / comments.length;
+  }
+
+  /// Promedio General Global de la Comunidad 
+  double get averageOverallRating {
+    if (comments.isEmpty) return rating; // 
+    final double overall = averageGraphicsRating +
+        averageGameplayRating +
+        averageStoryRating +
+        averageInnovationRating;
+    return overall / 4.0;
   }
 
   void updateFavoriteStatus() {
@@ -46,7 +103,6 @@ class GameDetailController extends GetxController {
 
   void toggleFavorite() {
     favoritesController.toggleFavorite(game);
-
     updateFavoriteStatus();
   }
 
@@ -70,242 +126,113 @@ class GameDetailController extends GetxController {
     await loadGameDetail();
   }
 
+
   int get id {
     final dynamic value = detail['id'];
-
-    if (value is int) {
-      return value;
-    }
-
-    if (value is num) {
-      return value.toInt();
-    }
-
+    if (value is int) return value;
+    if (value is num) return value.toInt();
     return game.id;
   }
 
-  String get name {
-    return _stringValue(detail['name'], game.name);
-  }
-
-  String get slug {
-    return _stringValue(detail['slug'], '');
-  }
+  String get name => _stringValue(detail['name'], game.name);
+  String get slug => _stringValue(detail['slug'], '');
 
   String get description {
     final String descriptionRaw = _stringValue(detail['description_raw'], '');
-
-    if (descriptionRaw.isNotEmpty) {
-      return descriptionRaw;
-    }
+    if (descriptionRaw.isNotEmpty) return descriptionRaw;
 
     final String descriptionHtml = _stringValue(detail['description'], '');
+    if (descriptionHtml.isNotEmpty) return _removeHtml(descriptionHtml);
 
-    if (descriptionHtml.isNotEmpty) {
-      return _removeHtml(descriptionHtml);
-    }
-
-    return 'Sin descripcion disponible.';
+    return 'Sin descripción disponible.';
   }
 
-  String get backgroundImage {
-    return _stringValue(detail['background_image'], game.backgroundImage);
-  }
+  String get backgroundImage =>
+      _stringValue(detail['background_image'], game.backgroundImage);
 
-  String get backgroundImageAdditional {
-    return _stringValue(detail['background_image_additional'], '');
-  }
+  String get backgroundImageAdditional =>
+      _stringValue(detail['background_image_additional'], '');
 
-  String get released {
-    return _stringValue(
-      detail['released'],
-      game.released.isNotEmpty ? game.released : 'Sin fecha',
-    );
-  }
+  String get released => _stringValue(
+        detail['released'],
+        game.released.isNotEmpty ? game.released : 'Sin fecha',
+      );
 
-  bool get tba {
-    final dynamic value = detail['tba'];
+  bool get tba => detail['tba'] is bool ? detail['tba'] : false;
 
-    if (value is bool) {
-      return value;
-    }
-
-    return false;
-  }
-
-  double get rating {
-    return _doubleValue(detail['rating'], game.rating);
-  }
-
-  int get ratingTop {
-    return _intValue(detail['rating_top'], 5);
-  }
-
-  int get ratingsCount {
-    return _intValue(detail['ratings_count'], 0);
-  }
-
-  int get reviewsCount {
-    return _intValue(detail['reviews_count'], 0);
-  }
-
-  int get reviewsTextCount {
-    return _intValue(detail['reviews_text_count'], 0);
-  }
-
-  int get metacritic {
-    return _intValue(detail['metacritic'], 0);
-  }
-
-  int get playtime {
-    return _intValue(detail['playtime'], 0);
-  }
-
-  int get added {
-    return _intValue(detail['added'], 0);
-  }
-
-  int get suggestionsCount {
-    return _intValue(detail['suggestions_count'], 0);
-  }
-
-  String get website {
-    return _stringValue(detail['website'], '');
-  }
-
-  String get redditUrl {
-    return _stringValue(detail['reddit_url'], '');
-  }
-
-  String get redditName {
-    return _stringValue(detail['reddit_name'], '');
-  }
-
-  String get redditDescription {
-    return _stringValue(detail['reddit_description'], '');
-  }
-
-  String get metacriticUrl {
-    return _stringValue(detail['metacritic_url'], '');
-  }
+  double get rating => _doubleValue(detail['rating'], game.rating);
+  int get ratingTop => _intValue(detail['rating_top'], 5);
+  int get ratingsCount => _intValue(detail['ratings_count'], 0);
+  int get reviewsCount => _intValue(detail['reviews_count'], 0);
+  int get reviewsTextCount => _intValue(detail['reviews_text_count'], 0);
+  int get metacritic => _intValue(detail['metacritic'], 0);
+  int get playtime => _intValue(detail['playtime'], 0);
+  int get added => _intValue(detail['added'], 0);
+  int get suggestionsCount => _intValue(detail['suggestions_count'], 0);
+  String get website => _stringValue(detail['website'], '');
+  String get redditUrl => _stringValue(detail['reddit_url'], '');
+  String get redditName => _stringValue(detail['reddit_name'], '');
+  String get redditDescription => _stringValue(detail['reddit_description'], '');
+  String get metacriticUrl => _stringValue(detail['metacritic_url'], '');
 
   String get esrbRating {
     final dynamic value = detail['esrb_rating'];
-
     if (value is Map) {
-      return _stringValue(value['name'], 'Sin clasificacion');
+      return _stringValue(value['name'], 'Sin clasificación');
     }
-
-    return 'Sin clasificacion';
+    return 'Sin clasificación';
   }
 
   List<String> get genres {
     final List<String> apiGenres = _extractNames(detail['genres']);
-
-    if (apiGenres.isNotEmpty) {
-      return apiGenres;
-    }
-
-    return game.genres;
+    return apiGenres.isNotEmpty ? apiGenres : game.genres;
   }
 
   List<String> get platforms {
     final dynamic value = detail['platforms'];
-
     if (value is List) {
       final List<String> result = [];
-
       for (final dynamic item in value) {
-        if (item is! Map) {
-          continue;
-        }
-
+        if (item is! Map) continue;
         final dynamic platform = item['platform'];
-
-        if (platform is! Map) {
-          continue;
-        }
-
+        if (platform is! Map) continue;
         final String platformName = _stringValue(platform['name'], '');
-
-        if (platformName.isNotEmpty) {
-          result.add(platformName);
-        }
+        if (platformName.isNotEmpty) result.add(platformName);
       }
-
-      if (result.isNotEmpty) {
-        return result;
-      }
+      if (result.isNotEmpty) return result;
     }
-
     return game.platforms;
   }
 
   List<String> get parentPlatforms {
     final dynamic value = detail['parent_platforms'];
-
-    if (value is! List) {
-      return [];
-    }
+    if (value is! List) return [];
 
     final List<String> result = [];
-
     for (final dynamic item in value) {
-      if (item is! Map) {
-        continue;
-      }
-
+      if (item is! Map) continue;
       final dynamic platform = item['platform'];
-
-      if (platform is! Map) {
-        continue;
-      }
-
+      if (platform is! Map) continue;
       final String platformName = _stringValue(platform['name'], '');
-
-      if (platformName.isNotEmpty) {
-        result.add(platformName);
-      }
+      if (platformName.isNotEmpty) result.add(platformName);
     }
-
     return result;
   }
 
-  List<String> get developers {
-    return _extractNames(detail['developers']);
-  }
-
-  List<String> get publishers {
-    return _extractNames(detail['publishers']);
-  }
-
-  List<String> get tags {
-    return _extractNames(detail['tags']);
-  }
-
-  List<Map<String, dynamic>> get ratings {
-    return _extractMaps(detail['ratings']);
-  }
+  List<String> get developers => _extractNames(detail['developers']);
+  List<String> get publishers => _extractNames(detail['publishers']);
+  List<String> get tags => _extractNames(detail['tags']);
+  List<Map<String, dynamic>> get ratings => _extractMaps(detail['ratings']);
 
   List<Map<String, dynamic>> get stores {
     final dynamic value = detail['stores'];
-
-    if (value is! List) {
-      return [];
-    }
+    if (value is! List) return [];
 
     final List<Map<String, dynamic>> result = [];
-
     for (final dynamic item in value) {
-      if (item is! Map) {
-        continue;
-      }
-
+      if (item is! Map) continue;
       final dynamic storeData = item['store'];
-
-      if (storeData is! Map) {
-        continue;
-      }
+      if (storeData is! Map) continue;
 
       result.add({
         'id': storeData['id'],
@@ -315,41 +242,27 @@ class GameDetailController extends GetxController {
         'price': null,
       });
     }
-
     return result;
   }
 
   Map<String, String> get minimumRequirements {
     final dynamic value = detail['platforms'];
-
-    if (value is! List) {
-      return {};
-    }
+    if (value is! List) return {};
 
     for (final dynamic item in value) {
-      if (item is! Map) {
-        continue;
-      }
-
+      if (item is! Map) continue;
       final dynamic platform = item['platform'];
-
-      if (platform is! Map) {
-        continue;
-      }
+      if (platform is! Map) continue;
 
       final String platformName = _stringValue(platform['name'], '');
-
-      if (platformName.toLowerCase() != 'pc') {
-        continue;
-      }
+      if (platformName.toLowerCase() != 'pc') continue;
 
       final dynamic requirements = item['requirements_en'];
-
       if (requirements is Map) {
         return {
           'minimum': _stringValue(
             requirements['minimum'],
-            'Sin requisitos minimos.',
+            'Sin requisitos mínimos.',
           ),
           'recommended': _stringValue(
             requirements['recommended'],
@@ -358,61 +271,38 @@ class GameDetailController extends GetxController {
         };
       }
     }
-
     return {};
   }
 
-  String get mainGenre {
-    if (genres.isEmpty) {
-      return 'Sin genero';
-    }
-
-    return genres.first;
-  }
-
-  String get mainDeveloper {
-    if (developers.isEmpty) {
-      return 'Sin desarrollador';
-    }
-
-    return developers.first;
-  }
-
-  String get informationLine {
-    return [mainGenre, mainDeveloper, released].join(' - ');
-  }
+  String get mainGenre => genres.isEmpty ? 'Sin género' : genres.first;
+  String get mainDeveloper => developers.isEmpty ? 'Sin desarrollador' : developers.first;
+  String get informationLine => [mainGenre, mainDeveloper, released].join(' - ');
 
   bool hasPlatform(String platformName) {
     final String selected = platformName.toLowerCase();
-
     return platforms.any((String platform) {
       final String current = platform.toLowerCase();
-
       switch (selected) {
         case 'pc':
           return current == 'pc' || current.contains('windows');
-
         case 'playstation':
           return current.contains('playstation');
-
         case 'xbox':
           return current.contains('xbox');
-
         case 'nintendo':
           return current.contains('nintendo') || current.contains('switch');
-
         default:
           return false;
       }
     });
   }
 
-  void selectUserRating(double value) {
-    if (value < 0 || value > 5) {
-      return;
-    }
+  // --- SELECCIÓN DE EVALUACIONES ---
 
-    userRating.value = value;
+  void selectUserRating(double value) {
+    if (value >= 0 && value <= 5) {
+      userRating.value = value;
+    }
   }
 
   void setGraphicsRating(double value) {
@@ -434,78 +324,92 @@ class GameDetailController extends GetxController {
   Future<void> saveRatingToFirebase() async {
     if (userRating.value <= 0) {
       Get.snackbar(
-        'Calificacion',
-        'Selecciona una calificacion.',
+        'Calificación',
+        'Selecciona una calificación.',
         snackPosition: SnackPosition.BOTTOM,
       );
-
       return;
     }
 
     Get.snackbar(
-      'Calificacion guardada',
-      'Tu calificacion fue guardada.',
+      'Calificación guardada',
+      'Tu calificación fue registrada exitosamente.',
       snackPosition: SnackPosition.BOTTOM,
     );
   }
 
+  /// Publica el comentario junto a las 4 calificaciones multicriterio en Cloud Firestore
   Future<void> publishCommentToFirebase() async {
+    if (isSubmittingComment.value) return;
+
     final String text = commentController.text.trim();
 
     if (text.isEmpty) {
       Get.snackbar(
-        'Comentario vacio',
-        'Escribe un comentario.',
+        'Comentario vacío',
+        'Por favor escribe una opinión sobre el juego.',
         snackPosition: SnackPosition.BOTTOM,
       );
-
       return;
     }
 
-    comments.insert(0, {
-      'text': text,
-      'createdAt': DateTime.now(),
-      'userName': 'Usuario',
-    });
+    try {
+      isSubmittingComment.value = true;
+      final User? user = _auth.currentUser;
 
-    commentController.clear();
+      final newComment = GameCommentModel(
+        gameId: game.id,
+        userId: user?.uid ?? 'anonymous',
+        userName: user?.displayName ?? user?.email?.split('@')[0] ?? 'Usuario Gamer',
+        userPhotoUrl: user?.photoURL ?? '',
+        text: text,
+        graphicsRating: graphicsRating.value,
+        gameplayRating: gameplayRating.value,
+        storyRating: storyRating.value,
+        innovationRating: innovationRating.value,
+        createdAt: DateTime.now(),
+      );
 
-    Get.snackbar(
-      'Comentario publicado',
-      'Tu comentario fue agregado.',
-      snackPosition: SnackPosition.BOTTOM,
-    );
+      await _firestoreService.addComment(newComment);
+
+      // Limpieza
+      commentController.clear();
+      graphicsRating.value = 5.0;
+      gameplayRating.value = 5.0;
+      storyRating.value = 5.0;
+      innovationRating.value = 5.0;
+
+      Get.snackbar(
+        'Comentario publicado',
+        'Tu evaluación ha sido registrada correctamente.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Error',
+        'No se pudo publicar el comentario: $e',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      isSubmittingComment.value = false;
+    }
   }
 
+
   List<String> _extractNames(dynamic value) {
-    if (value is! List) {
-      return [];
-    }
-
+    if (value is! List) return [];
     final List<String> result = [];
-
     for (final dynamic item in value) {
-      if (item is! Map) {
-        continue;
-      }
-
+      if (item is! Map) continue;
       final String itemName = _stringValue(item['name'], '');
-
-      if (itemName.isNotEmpty) {
-        result.add(itemName);
-      }
+      if (itemName.isNotEmpty) result.add(itemName);
     }
-
     return result;
   }
 
   List<Map<String, dynamic>> _extractMaps(dynamic value) {
-    if (value is! List) {
-      return [];
-    }
-
+    if (value is! List) return [];
     final List<Map<String, dynamic>> result = [];
-
     for (final dynamic item in value) {
       if (item is Map<String, dynamic>) {
         result.add(item);
@@ -513,37 +417,23 @@ class GameDetailController extends GetxController {
         result.add(Map<String, dynamic>.from(item));
       }
     }
-
     return result;
   }
 
   int _intValue(dynamic value, int fallback) {
-    if (value is int) {
-      return value;
-    }
-
-    if (value is num) {
-      return value.toInt();
-    }
-
+    if (value is int) return value;
+    if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '') ?? fallback;
   }
 
   double _doubleValue(dynamic value, double fallback) {
-    if (value is num) {
-      return value.toDouble();
-    }
-
+    if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '') ?? fallback;
   }
 
   String _stringValue(dynamic value, String fallback) {
     final String text = value?.toString().trim() ?? '';
-
-    if (text.isEmpty || text.toLowerCase() == 'null') {
-      return fallback;
-    }
-
+    if (text.isEmpty || text.toLowerCase() == 'null') return fallback;
     return text;
   }
 
@@ -560,7 +450,6 @@ class GameDetailController extends GetxController {
   @override
   void onClose() {
     commentController.dispose();
-
     super.onClose();
   }
 }

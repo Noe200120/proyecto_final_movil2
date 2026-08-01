@@ -1,9 +1,59 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import '../models/modelo.dart';
 
 class FavoritesController extends GetxController {
-  final RxList<GameModel> favoriteGames =
-      <GameModel>[].obs;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  final RxList<GameModel> favoriteGames = <GameModel>[].obs;
+
+  StreamSubscription<User?>? _authSubscription;
+  StreamSubscription<QuerySnapshot>? _favoritesSubscription;
+
+  @override
+  void onInit() {
+    super.onInit();
+    // cambios de autenticación
+    _authSubscription = _auth.authStateChanges().listen((User? user) {
+      if (user != null) {
+        _listenToFavorites(user.uid);
+      } else {
+        _favoritesSubscription?.cancel();
+        favoriteGames.clear();
+      }
+    });
+  }
+
+
+  void _listenToFavorites(String userId) {
+    _favoritesSubscription?.cancel();
+
+    _favoritesSubscription = _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('favorites')
+        .snapshots()
+        .listen(
+      (snapshot) {
+        final List<GameModel> loaded = snapshot.docs.map((doc) {
+          final data = doc.data();
+          return GameModel.fromJson(data);
+        }).toList();
+
+        favoriteGames.assignAll(loaded);
+      },
+      onError: (error) {
+        Get.snackbar(
+          'Error',
+          'No se pudieron cargar los favoritos: $error',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      },
+    );
+  }
 
   bool isFavorite(int gameId) {
     return favoriteGames.any(
@@ -25,7 +75,6 @@ class FavoritesController extends GetxController {
     }
 
     favoriteGames.add(game);
-    favoriteGames.refresh();
 
     Get.snackbar(
       'Agregado a favoritos',
@@ -47,11 +96,10 @@ class FavoritesController extends GetxController {
       }
     }
 
+
     favoriteGames.removeWhere(
       (GameModel game) => game.id == gameId,
     );
-
-    favoriteGames.refresh();
 
     if (removedGame != null) {
       Get.snackbar(
@@ -65,9 +113,10 @@ class FavoritesController extends GetxController {
     removeFavoriteFromFirebase(gameId);
   }
 
-  void clearFavorites() {
+  void clearFavorites() async {
+    final User? user = _auth.currentUser;
+
     favoriteGames.clear();
-    favoriteGames.refresh();
 
     Get.snackbar(
       'Favoritos eliminados',
@@ -75,21 +124,74 @@ class FavoritesController extends GetxController {
       snackPosition: SnackPosition.BOTTOM,
       duration: const Duration(seconds: 2),
     );
+
+    if (user != null) {
+      try {
+        final collection = _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('favorites');
+
+        final snapshots = await collection.get();
+        for (var doc in snapshots.docs) {
+          await doc.reference.delete();
+        }
+      } catch (e) {
+        Get.snackbar(
+          'Error',
+          'No se pudieron borrar todos los favoritos de Firebase.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    }
   }
 
-  Future<void> loadFavoritesFromFirebase() async {
-    // Se conectara con Firebase posteriormente.
+  Future<void> saveFavoriteToFirebase(GameModel game) async {
+    final User? user = _auth.currentUser;
+
+    if (user == null) return;
+
+    try {
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorites')
+          .doc(game.id.toString())
+          .set(game.toJson());
+    } catch (e) {
+      Get.snackbar(
+        'Error de sincronización',
+        'No se pudo guardar en la nube: $e',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
   }
 
-  Future<void> saveFavoriteToFirebase(
-    GameModel game,
-  ) async {
-    // Se conectara con Firebase posteriormente.
+  Future<void> removeFavoriteFromFirebase(int gameId) async {
+    final User? user = _auth.currentUser;
+
+    if (user == null) return;
+
+    try {
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorites')
+          .doc(gameId.toString())
+          .delete();
+    } catch (e) {
+      Get.snackbar(
+        'Error de sincronización',
+        'No se pudo eliminar de la nube: $e',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
   }
 
-  Future<void> removeFavoriteFromFirebase(
-    int gameId,
-  ) async {
-    // Se conectara con Firebase posteriormente.
+  @override
+  void onClose() {
+    _authSubscription?.cancel();
+    _favoritesSubscription?.cancel();
+    super.onClose();
   }
 }

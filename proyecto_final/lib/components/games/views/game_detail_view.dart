@@ -7,14 +7,14 @@ import '../controllers/game_detail_controller.dart';
 import '../models/modelo.dart';
 
 class GameDetailView extends StatelessWidget {
-  GameDetailView({super.key, required this.game});
-
   final GameModel game;
+  final GameDetailController controller;
 
-  late final GameDetailController controller = Get.put(
-    GameDetailController(game: game),
-    tag: game.id.toString(),
-  );
+  GameDetailView({super.key, required this.game})
+      : controller = Get.put(
+          GameDetailController(game: game),
+          tag: game.id.toString(),
+        );
 
   @override
   Widget build(BuildContext context) {
@@ -39,16 +39,13 @@ class GameDetailView extends StatelessWidget {
         ],
       ),
       body: Obx(() {
-        final bool loading = controller.isLoading.value;
-        final String error = controller.errorMessage.value;
-
-        if (loading) {
+        if (controller.isLoading.value) {
           return const Center(
             child: CircularProgressIndicator(color: AppColors.primary),
           );
         }
 
-        if (error.isNotEmpty) {
+        if (controller.errorMessage.value.isNotEmpty) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -58,7 +55,7 @@ class GameDetailView extends StatelessWidget {
                   DesignPlaceholder(
                     icon: Icons.error_outline_rounded,
                     title: 'Error al cargar el detalle',
-                    message: error,
+                    message: controller.errorMessage.value,
                   ),
                   const SizedBox(height: 16),
                   FilledButton.icon(
@@ -81,7 +78,6 @@ class GameDetailView extends StatelessWidget {
             children: [
               _buildCover(),
               const SizedBox(height: 22),
-
               Text(
                 controller.name,
                 style: const TextStyle(
@@ -90,9 +86,7 @@ class GameDetailView extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-
               const SizedBox(height: 8),
-
               Text(
                 controller.informationLine,
                 style: const TextStyle(
@@ -100,24 +94,18 @@ class GameDetailView extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-
               const SizedBox(height: 14),
-
               _buildGeneralInformation(),
-
               const SizedBox(height: 24),
-
               const Text(
-                'Descripcion',
+                'Descripción',
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 19,
                   fontWeight: FontWeight.w900,
                 ),
               ),
-
               const SizedBox(height: 9),
-
               Text(
                 controller.description,
                 textAlign: TextAlign.justify,
@@ -126,17 +114,15 @@ class GameDetailView extends StatelessWidget {
                   height: 1.55,
                 ),
               ),
-
               if (controller.genres.isNotEmpty) ...[
                 const SizedBox(height: 24),
                 const SectionTitle(
-                  title: 'Generos',
-                  subtitle: 'Categorias del videojuego',
+                  title: 'Géneros',
+                  subtitle: 'Categorías del videojuego',
                 ),
                 const SizedBox(height: 12),
                 _buildChips(controller.genres),
               ],
-
               if (controller.platforms.isNotEmpty) ...[
                 const SizedBox(height: 24),
                 const SectionTitle(
@@ -146,7 +132,6 @@ class GameDetailView extends StatelessWidget {
                 const SizedBox(height: 12),
                 _buildChips(controller.platforms),
               ],
-
               if (controller.developers.isNotEmpty) ...[
                 const SizedBox(height: 24),
                 const SectionTitle(
@@ -156,7 +141,6 @@ class GameDetailView extends StatelessWidget {
                 const SizedBox(height: 12),
                 _buildChips(controller.developers),
               ],
-
               if (controller.publishers.isNotEmpty) ...[
                 const SizedBox(height: 24),
                 const SectionTitle(
@@ -166,95 +150,67 @@ class GameDetailView extends StatelessWidget {
                 const SizedBox(height: 12),
                 _buildChips(controller.publishers),
               ],
-
               const SizedBox(height: 26),
-
               const SectionTitle(
                 title: 'Precios por plataforma',
                 subtitle: 'Disponibilidad y tiendas',
               ),
-
               const SizedBox(height: 12),
-
               _PlatformPriceDesign(
                 icon: Icons.computer_rounded,
                 platform: 'PC',
                 available: controller.hasPlatform('PC'),
                 stores: _storesForPlatform('PC'),
               ),
-
               _PlatformPriceDesign(
                 icon: Icons.sports_esports_rounded,
                 platform: 'PlayStation',
                 available: controller.hasPlatform('PlayStation'),
                 stores: _storesForPlatform('PlayStation'),
               ),
-
               _PlatformPriceDesign(
                 icon: Icons.gamepad_rounded,
                 platform: 'Xbox',
                 available: controller.hasPlatform('Xbox'),
                 stores: _storesForPlatform('Xbox'),
               ),
-
               _PlatformPriceDesign(
                 icon: Icons.videogame_asset_rounded,
                 platform: 'Nintendo',
                 available: controller.hasPlatform('Nintendo'),
                 stores: _storesForPlatform('Nintendo'),
               ),
-
               if (controller.stores.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 _buildStores(),
               ],
-
               const SizedBox(height: 26),
-
               SectionTitle(
                 title: 'Calificaciones',
                 subtitle: '${controller.ratingsCount} evaluaciones en RAWG',
               ),
-
               const SizedBox(height: 12),
-
               _RatingAspectDesign(
                 label: 'RAWG',
                 value: controller.rating,
                 maximum: controller.ratingTop.toDouble(),
               ),
-
               _RatingAspectDesign(
                 label: 'Metacritic',
                 value: controller.metacritic.toDouble(),
                 maximum: 100,
               ),
-
               const SizedBox(height: 12),
-
               _buildRatingSummary(),
-
-              const SizedBox(height: 18),
-
-              _buildUserRating(),
-
               const SizedBox(height: 26),
-
-              Obx(
-                () => SectionTitle(
-                  title: 'Comentarios',
-                  subtitle: '${controller.comments.length} comentarios',
-                ),
+              SectionTitle(
+                title: 'Comentarios',
+                subtitle: '${controller.comments.length} comentarios',
               ),
-
               const SizedBox(height: 12),
-
               _buildComments(),
-
               const SizedBox(height: 14),
-
               _buildCommentForm(),
-
               if (controller.minimumRequirements.isNotEmpty) ...[
                 const SizedBox(height: 26),
                 const SectionTitle(
@@ -264,12 +220,11 @@ class GameDetailView extends StatelessWidget {
                 const SizedBox(height: 12),
                 _buildRequirements(),
               ],
-
               if (controller.tags.isNotEmpty) ...[
                 const SizedBox(height: 26),
                 const SectionTitle(
                   title: 'Etiquetas',
-                  subtitle: 'Caracteristicas del juego',
+                  subtitle: 'Características del juego',
                 ),
                 const SizedBox(height: 12),
                 _buildChips(controller.tags.take(15).toList()),
@@ -292,9 +247,8 @@ class GameDetailView extends StatelessWidget {
                 width: double.infinity,
                 height: double.infinity,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return _buildCoverPlaceholder();
-                },
+                errorBuilder: (context, error, stackTrace) =>
+                    _buildCoverPlaceholder(),
               )
             : _buildCoverPlaceholder(),
       ),
@@ -355,7 +309,7 @@ class GameDetailView extends StatelessWidget {
           ),
           _InfoItem(
             icon: Icons.schedule_rounded,
-            label: 'Duracion',
+            label: 'Duración',
             value: controller.playtime > 0 ? '${controller.playtime} h' : '--',
           ),
           _InfoItem(
@@ -370,7 +324,7 @@ class GameDetailView extends StatelessWidget {
           ),
           _InfoItem(
             icon: Icons.warning_amber_rounded,
-            label: 'Clasificacion',
+            label: 'Clasificación',
             value: controller.esrbRating,
           ),
         ],
@@ -405,27 +359,20 @@ class GameDetailView extends StatelessWidget {
 
   String _storesForPlatform(String platform) {
     final List<String> names = controller.stores
-        .map((store) {
-          return store['name']?.toString() ?? '';
-        })
+        .map((store) => store['name']?.toString() ?? '')
         .where((name) {
           final String lower = name.toLowerCase();
-
           switch (platform.toLowerCase()) {
             case 'pc':
               return lower.contains('steam') ||
                   lower.contains('epic') ||
                   lower.contains('gog');
-
             case 'playstation':
               return lower.contains('playstation');
-
             case 'xbox':
               return lower.contains('xbox') || lower.contains('microsoft');
-
             case 'nintendo':
               return lower.contains('nintendo');
-
             default:
               return false;
           }
@@ -433,11 +380,7 @@ class GameDetailView extends StatelessWidget {
         .where((name) => name.isNotEmpty)
         .toList();
 
-    if (names.isEmpty) {
-      return 'Sin tienda registrada';
-    }
-
-    return names.join(' - ');
+    return names.isEmpty ? 'Sin tienda registrada' : names.join(' - ');
   }
 
   Widget _buildStores() {
@@ -462,7 +405,6 @@ class GameDetailView extends StatelessWidget {
           const SizedBox(height: 12),
           ...controller.stores.map((store) {
             final String name = store['name']?.toString() ?? 'Tienda';
-
             final String domain = store['domain']?.toString() ?? '';
 
             return Padding(
@@ -538,7 +480,7 @@ class GameDetailView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Calificacion general',
+                  'Calificación general',
                   style: TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 16,
@@ -563,90 +505,22 @@ class GameDetailView extends StatelessWidget {
     );
   }
 
-  Widget _buildUserRating() {
-    return Obx(() {
-      final double selectedRating = controller.userRating.value;
-
-      return Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Evaluacion del usuario',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Selecciona una calificacion para este juego.',
-              style: TextStyle(color: AppColors.textSecondary, height: 1.4),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: List.generate(5, (index) {
-                final int star = index + 1;
-                final bool selected = star <= selectedRating;
-
-                return IconButton(
-                  onPressed: () {
-                    controller.selectUserRating(star.toDouble());
-                  },
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 39,
-                    minHeight: 39,
-                  ),
-                  icon: Icon(
-                    selected ? Icons.star_rounded : Icons.star_border_rounded,
-                    color: AppColors.warning,
-                    size: 31,
-                  ),
-                );
-              }),
-            ),
-            const SizedBox(height: 15),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: FilledButton(
-                onPressed: selectedRating > 0
-                    ? controller.saveRatingToFirebase
-                    : null,
-                child: const Text('Guardar calificacion'),
-              ),
-            ),
-          ],
-        ),
-      );
-    });
-  }
-
   Widget _buildComments() {
     return Obx(() {
       if (controller.comments.isEmpty) {
         return const DesignPlaceholder(
           icon: Icons.chat_bubble_outline_rounded,
-          title: 'Los comentarios apareceran aqui',
+          title: 'Los comentarios aparecerán aquí',
           message:
-              'Esta seccion mostrara las opiniones publicadas por usuarios.',
+              'Esta sección mostrará las opiniones publicadas por usuarios.',
           compact: true,
         );
       }
 
       return Column(
         children: controller.comments.map((comment) {
-          final String userName = comment['userName']?.toString() ?? 'Usuario';
-
-          final String text = comment['text']?.toString() ?? '';
+          final String userName =
+              comment.userName.isNotEmpty ? comment.userName : 'Usuario';
 
           return Container(
             width: double.infinity,
@@ -662,32 +536,93 @@ class GameDetailView extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const CircleAvatar(
+                    CircleAvatar(
                       radius: 17,
                       backgroundColor: AppColors.surfaceLight,
-                      child: Icon(
-                        Icons.person_rounded,
-                        color: AppColors.primary,
-                        size: 20,
-                      ),
+                      backgroundImage: comment.userPhotoUrl.isNotEmpty
+                          ? NetworkImage(comment.userPhotoUrl)
+                          : null,
+                      child: comment.userPhotoUrl.isEmpty
+                          ? const Icon(
+                              Icons.person_rounded,
+                              color: AppColors.primary,
+                              size: 20,
+                            )
+                          : null,
                     ),
                     const SizedBox(width: 10),
-                    Text(
-                      userName,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w900,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            userName,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            '${comment.createdAt.day}/${comment.createdAt.month}/${comment.createdAt.year}',
+                            style: TextStyle(
+                              color: AppColors.textSecondary.withOpacity(0.6),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.star_rounded,
+                            color: AppColors.warning,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            comment.averageRating.toStringAsFixed(1),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.warning,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Text(
-                  text,
+                  comment.text,
                   style: const TextStyle(
                     color: AppColors.textSecondary,
+                    fontSize: 13,
                     height: 1.4,
                   ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 6,
+                  children: [
+                    _buildMiniRatingTag('Gráficos', comment.graphicsRating),
+                    _buildMiniRatingTag('Jugabilidad', comment.gameplayRating),
+                    _buildMiniRatingTag('Historia', comment.storyRating),
+                    _buildMiniRatingTag(
+                        'Innovación', comment.innovationRating),
+                  ],
                 ),
               ],
             ),
@@ -695,6 +630,17 @@ class GameDetailView extends StatelessWidget {
         }).toList(),
       );
     });
+  }
+
+  Widget _buildMiniRatingTag(String label, double rating) {
+    return Text(
+      '$label: ${rating.toStringAsFixed(1)} ★',
+      style: TextStyle(
+        fontSize: 11,
+        color: AppColors.textSecondary.withOpacity(0.8),
+        fontWeight: FontWeight.w600,
+      ),
+    );
   }
 
   Widget _buildCommentForm() {
@@ -721,11 +667,45 @@ class GameDetailView extends StatelessWidget {
             controller: controller.commentController,
             maxLines: 4,
             decoration: const InputDecoration(
-              hintText: 'Escribe tu opinion sobre el juego...',
+              hintText: 'Escribe tu opinión sobre el juego...',
               alignLabelWithHint: true,
             ),
           ),
-          const SizedBox(height: 13),
+          const SizedBox(height: 16),
+          const Text(
+            'Califica los aspectos del juego:',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Column(
+            children: [
+              Obx(() => _buildAspectRatingSelector(
+                    'Gráficos',
+                    controller.graphicsRating.value,
+                    (val) => controller.graphicsRating.value = val,
+                  )),
+              Obx(() => _buildAspectRatingSelector(
+                    'Jugabilidad',
+                    controller.gameplayRating.value,
+                    (val) => controller.gameplayRating.value = val,
+                  )),
+              Obx(() => _buildAspectRatingSelector(
+                    'Historia',
+                    controller.storyRating.value,
+                    (val) => controller.storyRating.value = val,
+                  )),
+              Obx(() => _buildAspectRatingSelector(
+                    'Innovación',
+                    controller.innovationRating.value,
+                    (val) => controller.innovationRating.value = val,
+                  )),
+            ],
+          ),
+          const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             height: 48,
@@ -740,13 +720,53 @@ class GameDetailView extends StatelessWidget {
     );
   }
 
+  Widget _buildAspectRatingSelector(
+    String label,
+    double currentValue,
+    Function(double) onRatingChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Row(
+            children: List.generate(5, (index) {
+              final double starValue = (index + 1).toDouble();
+              final bool isSelected = starValue <= currentValue;
+
+              return IconButton(
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: EdgeInsets.zero,
+                icon: Icon(
+                  isSelected ? Icons.star_rounded : Icons.star_border_rounded,
+                  color: AppColors.warning,
+                  size: 22,
+                ),
+                onPressed: () => onRatingChanged(starValue),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRequirements() {
     final String minimum =
-        controller.minimumRequirements['minimum'] ?? 'Sin requisitos minimos.';
+        controller.minimumRequirements['minimum'] ?? 'Sin requisitos mínimos.';
 
     final String recommended =
         controller.minimumRequirements['recommended'] ??
-        'Sin requisitos recomendados.';
+            'Sin requisitos recomendados.';
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -759,7 +779,7 @@ class GameDetailView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Minimos',
+            'Mínimos',
             style: TextStyle(
               color: AppColors.primary,
               fontWeight: FontWeight.w900,
@@ -966,7 +986,7 @@ class _RatingAspectDesign extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               child: LinearProgressIndicator(
                 value: progress,
-                minHeight: 9,
+                minHeight: 8,
                 backgroundColor: AppColors.surfaceLight,
                 color: AppColors.primary,
               ),
@@ -974,10 +994,10 @@ class _RatingAspectDesign extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Text(
-            value > 0 ? value.toStringAsFixed(value % 1 == 0 ? 0 : 1) : '--',
+            value.toStringAsFixed(1),
             style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],
