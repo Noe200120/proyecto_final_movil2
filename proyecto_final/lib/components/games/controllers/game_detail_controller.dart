@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../shared/firestore_service.dart';
+import '../../shared/price_request_handler.dart';
 import '../../shared/request_handler.dart';
 import '../models/game_comment_model.dart';
 import '../models/modelo.dart';
@@ -16,18 +17,15 @@ class GameDetailController extends GetxController {
   final RequestHandler requestHandler = RequestHandler();
   final FirestoreService _firestoreService = Get.put(FirestoreService());
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final PriceRequestHandler priceRequestHandler = PriceRequestHandler();
 
   final FavoritesController favoritesController =
       Get.find<FavoritesController>();
 
-<<<<<<< Updated upstream
-=======
+
   /// Precio real de PC obtenido de CheapShark. Null mientras carga o si
-  /// CheapShark no tiene el juego (en ese caso se usa un precio de
-  /// mercado simulado como respaldo).
   final Rxn<double> pcRealPrice = Rxn<double>();
 
->>>>>>> Stashed changes
   final RxBool isLoading = false.obs;
   final RxBool isSubmittingComment = false.obs; // Prevención de doble clic
   final RxString errorMessage = ''.obs;
@@ -53,8 +51,7 @@ class GameDetailController extends GetxController {
     updateFavoriteStatus();
     loadGameDetail();
     _listenToComments();
-<<<<<<< Updated upstream
-=======
+
     fetchRealPcPrice();
   }
 
@@ -67,7 +64,7 @@ class GameDetailController extends GetxController {
     );
 
     pcRealPrice.value = price;
->>>>>>> Stashed changes
+
   }
 
   /// comentarios en tiempo real desde firestore
@@ -257,15 +254,84 @@ class GameDetailController extends GetxController {
       final dynamic storeData = item['store'];
       if (storeData is! Map) continue;
 
+      final int storeId = _intValue(storeData['id'], 0);
+      final String storeName = _stringValue(storeData['name'], 'Tienda');
+
       result.add({
         'id': storeData['id'],
-        'name': _stringValue(storeData['name'], 'Tienda'),
+        'name': storeName,
         'domain': _stringValue(storeData['domain'], ''),
         'slug': _stringValue(storeData['slug'], ''),
-        'price': null,
+        'price': _priceForStore(storeName: storeName, storeId: storeId),
       });
     }
     return result;
+  }
+
+  /// Precios de mercado "normales" (tiers tipicos con los que se suele
+  /// vender un juego digital: 19.99, 29.99, 39.99, 49.99, 59.99, 69.99).
+  static const List<double> _marketTiers = [
+    19.99,
+    29.99,
+    39.99,
+    49.99,
+    59.99,
+    69.99,
+  ];
+
+  /// Redondea [price] hacia arriba al tier de mercado normal mas cercano.
+  double _nearestMarketTier(double price) {
+    for (final double tier in _marketTiers) {
+      if (tier >= price) return tier;
+    }
+    return _marketTiers.last;
+  }
+
+  /// Elige un tier de mercado normal de forma determinista segun [seed],
+  /// para cuando no hay un precio real de referencia.
+  double _marketTierForSeed(int seed) {
+    final int index = seed.abs() % _marketTiers.length;
+    return _marketTiers[index];
+  }
+
+  /// Precio para una tienda individual de la lista "Tiendas disponibles".
+  /// Steam usa el precio real de CheapShark si ya se cargo; el resto usa
+  /// un precio de mercado normal (anclado al real de PC si existe).
+  double _priceForStore({required String storeName, required int storeId}) {
+    final bool isSteam = storeName.toLowerCase().contains('steam');
+
+    if (isSteam && pcRealPrice.value != null) {
+      return pcRealPrice.value!;
+    }
+
+    if (pcRealPrice.value != null) {
+      return _nearestMarketTier(pcRealPrice.value!);
+    }
+
+    return _marketTierForSeed(id * 17 + storeId);
+  }
+
+  /// Precio para una plataforma (PC, PlayStation, Xbox, Nintendo).
+  /// PC usa el precio real de CheapShark cuando esta disponible; las
+  /// consolas siempre usan un precio de mercado normal (CheapShark no
+  /// cubre PlayStation Store, Xbox Store ni Nintendo eShop), anclado al
+  /// precio real de PC cuando se conoce. Retorna null si el juego no
+  /// esta disponible en esa plataforma.
+  double? simulatedPriceForPlatform(String platformName) {
+    if (!hasPlatform(platformName)) return null;
+
+    final bool isPc = platformName.toLowerCase() == 'pc';
+
+    if (isPc && pcRealPrice.value != null) {
+      return pcRealPrice.value;
+    }
+
+    if (pcRealPrice.value != null) {
+      return _nearestMarketTier(pcRealPrice.value!);
+    }
+
+    final int seed = id * 31 + platformName.toLowerCase().hashCode;
+    return _marketTierForSeed(seed);
   }
 
   Map<String, String> get minimumRequirements {
