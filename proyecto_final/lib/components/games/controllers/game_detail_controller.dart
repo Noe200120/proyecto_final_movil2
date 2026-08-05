@@ -20,6 +20,14 @@ class GameDetailController extends GetxController {
   final FavoritesController favoritesController =
       Get.find<FavoritesController>();
 
+<<<<<<< Updated upstream
+=======
+  /// Precio real de PC obtenido de CheapShark. Null mientras carga o si
+  /// CheapShark no tiene el juego (en ese caso se usa un precio de
+  /// mercado simulado como respaldo).
+  final Rxn<double> pcRealPrice = Rxn<double>();
+
+>>>>>>> Stashed changes
   final RxBool isLoading = false.obs;
   final RxBool isSubmittingComment = false.obs; // Prevención de doble clic
   final RxString errorMessage = ''.obs;
@@ -45,6 +53,21 @@ class GameDetailController extends GetxController {
     updateFavoriteStatus();
     loadGameDetail();
     _listenToComments();
+<<<<<<< Updated upstream
+=======
+    fetchRealPcPrice();
+  }
+
+  /// Consulta CheapShark por el precio real mas bajo de PC para este
+  /// juego. No bloquea la UI: si falla o no encuentra nada, los precios
+  /// de PC y consolas simplemente usan el precio de mercado simulado.
+  Future<void> fetchRealPcPrice() async {
+    final double? price = await priceRequestHandler.cheapestPcPrice(
+      game.name,
+    );
+
+    pcRealPrice.value = price;
+>>>>>>> Stashed changes
   }
 
   /// comentarios en tiempo real desde firestore
