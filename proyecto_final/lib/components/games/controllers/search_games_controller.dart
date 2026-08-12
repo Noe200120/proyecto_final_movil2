@@ -7,97 +7,38 @@ import 'rawg_games_controller.dart';
 class SearchGamesController extends RawgGamesController {
   static const List<String> sortOptions = [
     'Relevancia',
-    'Mejor calificacion',
     'Nombre A-Z',
     'Mas recientes',
     'Mas antiguos',
   ];
 
-  static const Map<String, String> genreSlugs = {
-    'Accion': 'action',
-    'Aventura': 'adventure',
-    'Carreras': 'racing',
-    'Estrategia': 'strategy',
-    'Deportes': 'sports',
-  };
-
-  final RequestHandler _requestHandler =
-      RequestHandler();
+  final RequestHandler _requestHandler = RequestHandler();
 
   final RxInt selectedSort = 0.obs;
   final RxBool hasSearched = false.obs;
 
   final RxString selectedGenreName = ''.obs;
-  final RxString selectedGenreSlug = ''.obs;
-  final RxString selectedTagSlug = ''.obs;
 
   List<GameModel> get sortedResults {
-    final List<GameModel> games =
-        List<GameModel>.from(
-      filteredGames,
-    );
+    final List<GameModel> games = List<GameModel>.from(filteredGames);
 
     switch (selectedSort.value) {
       case 1:
-        games.sort(
-          (
-            GameModel a,
-            GameModel b,
-          ) {
-            return b.rating.compareTo(
-              a.rating,
-            );
-          },
-        );
+        games.sort((GameModel a, GameModel b) {
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        });
         break;
 
       case 2:
-        games.sort(
-          (
-            GameModel a,
-            GameModel b,
-          ) {
-            return a.name
-                .toLowerCase()
-                .compareTo(
-                  b.name.toLowerCase(),
-                );
-          },
-        );
+        games.sort((GameModel a, GameModel b) {
+          return _dateValue(b.released).compareTo(_dateValue(a.released));
+        });
         break;
 
       case 3:
-        games.sort(
-          (
-            GameModel a,
-            GameModel b,
-          ) {
-            return _dateValue(
-              b.released,
-            ).compareTo(
-              _dateValue(
-                a.released,
-              ),
-            );
-          },
-        );
-        break;
-
-      case 4:
-        games.sort(
-          (
-            GameModel a,
-            GameModel b,
-          ) {
-            return _dateValue(
-              a.released,
-            ).compareTo(
-              _dateValue(
-                b.released,
-              ),
-            );
-          },
-        );
+        games.sort((GameModel a, GameModel b) {
+          return _dateValue(a.released).compareTo(_dateValue(b.released));
+        });
         break;
 
       default:
@@ -107,33 +48,26 @@ class SearchGamesController extends RawgGamesController {
     return games;
   }
 
-  void search(
-    String value,
-  ) {
-    final String text =
-        value.trim();
+  void search(String value) {
+    final String text = value.trim();
 
     searchText.value = text;
-    hasSearched.value =
-        text.isNotEmpty;
 
     selectedGenreName.value = '';
-    selectedGenreSlug.value = '';
-    selectedTagSlug.value = '';
 
     if (text.isEmpty) {
+      hasSearched.value = false;
       filteredGames.clear();
       return;
     }
 
+    hasSearched.value = true;
     currentPage.value = 1;
 
     loadSearchResults();
   }
 
-  void submitSearch(
-    String value,
-  ) {
+  void submitSearch(String value) {
     search(value);
   }
 
@@ -143,56 +77,34 @@ class SearchGamesController extends RawgGamesController {
     bool useTag = false,
   }) async {
     searchController.clear();
+
     searchText.value = '';
 
     selectedGenreName.value = name;
 
-    if (useTag) {
-      selectedGenreSlug.value = '';
-      selectedTagSlug.value = slug;
-    } else {
-      selectedGenreSlug.value = slug;
-      selectedTagSlug.value = '';
-    }
-
     hasSearched.value = true;
+
     currentPage.value = 1;
 
     await loadSearchResults();
   }
 
-  void selectSearchPlatform(
-    int index,
-  ) {
-    selectedPlatform.value =
-        index;
+  void selectSearchPlatform(int index) {
+    if (index < 0 || index >= RawgGamesController.platforms.length) {
+      return;
+    }
+
+    selectedPlatform.value = index;
 
     currentPage.value = 1;
 
-    final bool hasText =
-        searchController.text
-            .trim()
-            .isNotEmpty;
-
-    final bool hasGenre =
-        selectedGenreSlug
-            .value
-            .isNotEmpty ||
-        selectedTagSlug
-            .value
-            .isNotEmpty;
-
-    if (hasText || hasGenre) {
-      hasSearched.value = true;
+    if (hasSearched.value) {
       loadSearchResults();
     }
   }
 
-  void selectSort(
-    int index,
-  ) {
-    if (index < 0 ||
-        index >= sortOptions.length) {
+  void selectSort(int index) {
+    if (index < 0 || index >= sortOptions.length) {
       return;
     }
 
@@ -208,18 +120,13 @@ class SearchGamesController extends RawgGamesController {
   }
 
   Future<void> loadSearchResults() async {
-    final String text =
-        searchController.text.trim();
+    final String text = searchController.text.trim();
 
-    final bool hasGenre =
-        selectedGenreSlug.value.isNotEmpty;
+    final bool hasText = text.isNotEmpty;
 
-    final bool hasTag =
-        selectedTagSlug.value.isNotEmpty;
+    final bool hasGenre = selectedGenreName.value.isNotEmpty;
 
-    if (text.isEmpty &&
-        !hasGenre &&
-        !hasTag) {
+    if (!hasText && !hasGenre) {
       filteredGames.clear();
       return;
     }
@@ -228,36 +135,85 @@ class SearchGamesController extends RawgGamesController {
       isLoading.value = true;
       errorMessage.value = '';
 
-      final RequestGamesModel response =
-          await _requestHandler.requestGetGames(
-        page: currentPage.value,
-        pageSize: 30,
-        search: text,
-        parentPlatformId:
-            _getParentPlatformId(),
-        genre:
-            selectedGenreSlug.value,
-        tag:
-            selectedTagSlug.value,
-        ordering:
-            _getApiOrdering(),
-      );
+      RequestGamesModel response;
 
-      filteredGames.assignAll(
-        response.results,
-      );
+      if (hasText) {
+        response = await _requestHandler.requestGetGames(
+          page: currentPage.value,
+          pageSize: 40,
+          search: text,
+          parentPlatformId: _getParentPlatformId(),
+        );
+      } else {
+        response = await _requestHandler.requestGetGames(
+          page: currentPage.value,
+          pageSize: 40,
+          parentPlatformId: _getParentPlatformId(),
+        );
+      }
+
+      List<GameModel> result = List<GameModel>.from(response.results);
+
+      if (hasGenre) {
+        result = _filterByGenre(result, selectedGenreName.value);
+      }
+
+      filteredGames.assignAll(result);
     } catch (error) {
       filteredGames.clear();
 
-      errorMessage.value = error
-          .toString()
-          .replaceFirst(
-            'Exception: ',
-            '',
-          );
+      errorMessage.value = error.toString().replaceFirst('Exception: ', '');
     } finally {
       isLoading.value = false;
     }
+  }
+
+  List<GameModel> _filterByGenre(List<GameModel> games, String genreName) {
+    final String selected = _normalizeGenre(genreName);
+
+    return games.where((GameModel game) {
+      return game.genres.any((String genre) {
+        final String current = _normalizeGenre(genre);
+
+        return _genreMatches(selected, current);
+      });
+    }).toList();
+  }
+
+  bool _genreMatches(String selected, String current) {
+    switch (selected) {
+      case 'accion':
+        return current == 'action';
+
+      case 'aventura':
+        return current == 'adventure';
+
+      case 'carreras':
+        return current == 'racing';
+
+      case 'terror':
+        return current == 'horror';
+
+      case 'estrategia':
+        return current == 'strategy';
+
+      case 'deportes':
+        return current == 'sports';
+
+      default:
+        return current == selected;
+    }
+  }
+
+  String _normalizeGenre(String value) {
+    return value
+        .trim()
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u');
   }
 
   Future<void> applyFilters() async {
@@ -276,13 +232,13 @@ class SearchGamesController extends RawgGamesController {
     searchText.value = '';
 
     selectedGenreName.value = '';
-    selectedGenreSlug.value = '';
-    selectedTagSlug.value = '';
 
     selectedPlatform.value = 0;
+
     selectedSort.value = 0;
 
     currentPage.value = 1;
+
     hasSearched.value = false;
 
     errorMessage.value = '';
@@ -309,35 +265,11 @@ class SearchGamesController extends RawgGamesController {
     }
   }
 
-  String _getApiOrdering() {
-    switch (selectedSort.value) {
-      case 1:
-        return '-rating';
-
-      case 2:
-        return 'name';
-
-      case 3:
-        return '-released';
-
-      case 4:
-        return 'released';
-
-      default:
-        return '-added';
-    }
-  }
-
-  int _dateValue(
-    String date,
-  ) {
+  int _dateValue(String date) {
     if (date.trim().isEmpty) {
       return 0;
     }
 
-    return DateTime.tryParse(
-          date,
-        )?.millisecondsSinceEpoch ??
-        0;
+    return DateTime.tryParse(date)?.millisecondsSinceEpoch ?? 0;
   }
 }

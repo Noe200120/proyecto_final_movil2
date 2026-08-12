@@ -12,7 +12,6 @@ class DiscoverView extends StatelessWidget {
 
   final RawgGamesController controller = Get.put(RawgGamesController());
 
-  // Permite mostrar "Seleccionar plataforma" al inicio.
   final RxBool platformWasSelected = false.obs;
 
   @override

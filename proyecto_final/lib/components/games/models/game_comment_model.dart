@@ -7,10 +7,10 @@ class GameCommentModel {
   final String userName;
   final String userPhotoUrl;
   final String text;
-  final double graphicsRating;  // Gráficos (1.0 - 5.0)
-  final double gameplayRating;  // Jugabilidad (1.0 - 5.0)
-  final double storyRating;     // Historia (1.0 - 5.0)
-  final double innovationRating;// Innovación (1.0 - 5.0)
+  final double graphicsRating;
+  final double gameplayRating;
+  final double storyRating;
+  final double innovationRating;
   final DateTime createdAt;
 
   GameCommentModel({
@@ -27,7 +27,6 @@ class GameCommentModel {
     required this.createdAt,
   });
 
-  /// Promedio general ponderado de los 4 aspectos
   double get averageRating =>
       (graphicsRating + gameplayRating + storyRating + innovationRating) / 4.0;
 

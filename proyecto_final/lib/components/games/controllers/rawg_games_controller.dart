@@ -7,8 +7,7 @@ import '../models/modelo.dart';
 class RawgGamesController extends GetxController {
   final RequestHandler requestHandler = RequestHandler();
 
-  final TextEditingController searchController =
-      TextEditingController();
+  final TextEditingController searchController = TextEditingController();
 
   final RxList<GameModel> games = <GameModel>[].obs;
   final RxList<GameModel> filteredGames = <GameModel>[].obs;
@@ -48,39 +47,110 @@ class RawgGamesController extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
-      final RequestGamesModel response =
-          await requestHandler.requestGetGames(
-        page: currentPage.value,
-        pageSize: gamesPerPage,
-      );
+      if (selectedPlatform.value == 0) {
+        await _loadAllPlatforms();
+      } else {
+        final int? platformId = _getSelectedPlatformId();
 
-      games.assignAll(response.results);
+        if (platformId == null) {
+          throw Exception('No se pudo identificar la plataforma.');
+        }
+
+        final RequestGamesModel response = await requestHandler.requestGetGames(
+          page: currentPage.value,
+          pageSize: gamesPerPage,
+          parentPlatformId: platformId,
+        );
+
+        games.assignAll(response.results);
+      }
 
       applyFilters();
     } catch (error) {
       games.clear();
       filteredGames.clear();
 
-      errorMessage.value = error
-          .toString()
-          .replaceFirst('Exception: ', '');
+      errorMessage.value = error.toString().replaceFirst('Exception: ', '');
     } finally {
       isLoading.value = false;
     }
+  }
+
+  Future<void> _loadAllPlatforms() async {
+    final List<int> platformIds = [1, 2, 3, 7];
+
+    const int gamesPerPlatform = 5;
+
+    final List<Future<RequestGamesModel>> requests = [];
+
+    for (final int platformId in platformIds) {
+      requests.add(
+        requestHandler.requestGetGames(
+          page: currentPage.value,
+          pageSize: gamesPerPlatform,
+          parentPlatformId: platformId,
+        ),
+      );
+    }
+
+    final List<RequestGamesModel> responses = await Future.wait(requests);
+
+    final List<GameModel> allGames = [];
+
+    for (final RequestGamesModel response in responses) {
+      allGames.addAll(response.results);
+    }
+
+    final Map<int, GameModel> uniqueGames = {};
+
+    for (final GameModel game in allGames) {
+      uniqueGames[game.id] = game;
+    }
+
+    final List<GameModel> finalGames = uniqueGames.values.toList();
+
+    finalGames.shuffle();
+
+    games.assignAll(finalGames);
   }
 
   Future<void> loadFeaturedGame() async {
     try {
       isFeaturedLoading.value = true;
 
-      final RequestGamesModel response =
-          await requestHandler.requestGetGames(
+      if (selectedPlatform.value == 0) {
+        final RequestGamesModel response = await requestHandler.requestGetGames(
+          page: 1,
+          pageSize: 1,
+          parentPlatformId: 1,
+        );
+
+        if (response.results.isNotEmpty) {
+          featuredGame.value = response.results.first;
+        } else {
+          featuredGame.value = null;
+        }
+
+        return;
+      }
+
+      final int? platformId = _getSelectedPlatformId();
+
+      if (platformId == null) {
+        featuredGame.value = null;
+        return;
+      }
+
+      final RequestGamesModel response = await requestHandler.requestGetGames(
         page: 1,
         pageSize: 1,
+        parentPlatformId: platformId,
       );
 
       if (response.results.isNotEmpty) {
         featuredGame.value = response.results.first;
+      } else {
+        featuredGame.value = null;
       }
     } catch (_) {
       featuredGame.value = null;
@@ -90,10 +160,7 @@ class RawgGamesController extends GetxController {
   }
 
   Future<void> reloadGames() async {
-    await Future.wait([
-      loadGames(),
-      loadFeaturedGame(),
-    ]);
+    await Future.wait([loadGames(), loadFeaturedGame()]);
   }
 
   Future<void> changePage(int page) async {
@@ -106,7 +173,6 @@ class RawgGamesController extends GetxController {
     }
 
     currentPage.value = page;
-    selectedPlatform.value = 0;
 
     await loadGames();
   }
@@ -123,14 +189,26 @@ class RawgGamesController extends GetxController {
     }
   }
 
-  void selectPlatform(int index) {
+  Future<void> selectPlatform(int index) async {
     if (index < 0 || index >= platforms.length) {
+      return;
+    }
+
+    if (selectedPlatform.value == index) {
       return;
     }
 
     selectedPlatform.value = index;
 
-    applyFilters();
+    currentPage.value = 1;
+
+    searchController.clear();
+    searchText.value = '';
+
+    games.clear();
+    filteredGames.clear();
+
+    await Future.wait([loadGames(), loadFeaturedGame()]);
   }
 
   void searchGames(String value) {
@@ -141,6 +219,7 @@ class RawgGamesController extends GetxController {
 
   void clearSearch() {
     searchController.clear();
+
     searchText.value = '';
 
     applyFilters();
@@ -150,58 +229,47 @@ class RawgGamesController extends GetxController {
     List<GameModel> result = List<GameModel>.from(games);
 
     if (searchText.value.isNotEmpty) {
-      result = result.where((game) {
+      result = result.where((GameModel game) {
         final String name = game.name.toLowerCase();
 
-        final bool matchesName =
-            name.contains(searchText.value);
+        final bool matchesName = name.contains(searchText.value);
 
-        final bool matchesGenre =
-            game.genres.any((genre) {
-          return genre
-              .toLowerCase()
-              .contains(searchText.value);
+        final bool matchesGenre = game.genres.any((String genre) {
+          return genre.toLowerCase().contains(searchText.value);
         });
 
         return matchesName || matchesGenre;
       }).toList();
     }
 
-    if (selectedPlatform.value != 0) {
-      final String selected =
-          platforms[selectedPlatform.value]
-              .toLowerCase();
-
-      result = result.where((game) {
-        return game.platforms.any((platform) {
-          final String platformName =
-              platform.toLowerCase();
-
-          switch (selected) {
-            case 'pc':
-              return platformName == 'pc' ||
-                  platformName.contains('windows');
-
-            case 'playstation':
-              return platformName
-                  .contains('playstation');
-
-            case 'xbox':
-              return platformName.contains('xbox');
-
-            case 'nintendo':
-              return platformName
-                  .contains('nintendo') ||
-                  platformName.contains('switch');
-
-            default:
-              return true;
-          }
-        });
-      }).toList();
-    }
-
     filteredGames.assignAll(result);
+  }
+
+  int? _getSelectedPlatformId() {
+    switch (selectedPlatform.value) {
+      // TODOS
+      case 0:
+        return null;
+
+      // PC
+      case 1:
+        return 1;
+
+      // PLAYSTATION
+      case 2:
+        return 2;
+
+      // XBOX
+      case 3:
+        return 3;
+
+      // NINTENDO
+      case 4:
+        return 7;
+
+      default:
+        return null;
+    }
   }
 
   @override

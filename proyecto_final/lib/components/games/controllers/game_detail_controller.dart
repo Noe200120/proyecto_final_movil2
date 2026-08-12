@@ -15,19 +15,22 @@ class GameDetailController extends GetxController {
   final GameModel game;
 
   final RequestHandler requestHandler = RequestHandler();
+
   final FirestoreService _firestoreService = Get.put(FirestoreService());
+
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
   final PriceRequestHandler priceRequestHandler = PriceRequestHandler();
 
   final FavoritesController favoritesController =
       Get.find<FavoritesController>();
 
-
-  /// Precio real de PC obtenido de CheapShark. Null mientras carga o si
   final Rxn<double> pcRealPrice = Rxn<double>();
 
   final RxBool isLoading = false.obs;
-  final RxBool isSubmittingComment = false.obs; // Prevención de doble clic
+
+  final RxBool isSubmittingComment = false.obs;
+
   final RxString errorMessage = ''.obs;
 
   final RxMap<String, dynamic> detail = <String, dynamic>{}.obs;
@@ -35,9 +38,13 @@ class GameDetailController extends GetxController {
   final RxBool isFavorite = false.obs;
 
   final RxDouble userRating = 0.0.obs;
+
   final RxDouble graphicsRating = 5.0.obs;
+
   final RxDouble gameplayRating = 5.0.obs;
+
   final RxDouble storyRating = 5.0.obs;
+
   final RxDouble innovationRating = 5.0.obs;
 
   final RxList<GameCommentModel> comments = <GameCommentModel>[].obs;
@@ -49,71 +56,103 @@ class GameDetailController extends GetxController {
     super.onInit();
 
     updateFavoriteStatus();
+
     loadGameDetail();
+
     _listenToComments();
 
     fetchRealPcPrice();
   }
 
-  /// Consulta CheapShark por el precio real mas bajo de PC para este
-  /// juego. No bloquea la UI: si falla o no encuentra nada, los precios
-  /// de PC y consolas simplemente usan el precio de mercado simulado.
   Future<void> fetchRealPcPrice() async {
-    final double? price = await priceRequestHandler.cheapestPcPrice(
-      game.name,
-    );
+    try {
+      final double? price = await priceRequestHandler.cheapestPcPrice(
+        game.name,
+      );
 
-    pcRealPrice.value = price;
-
+      pcRealPrice.value = price;
+    } catch (_) {
+      pcRealPrice.value = null;
+    }
   }
 
-  /// comentarios en tiempo real desde firestore
   void _listenToComments() {
     comments.bindStream(_firestoreService.getCommentsStream(game.id));
   }
 
-  /// Total de evaluaciones realizadas por la comunidad para este juego
   int get communityReviewsCount => comments.length;
 
-  /// Promedio de Gráficos
   double get averageGraphicsRating {
-    if (comments.isEmpty) return 0.0;
-    final double total =
-        comments.fold<double>(0.0, (sum, c) => sum + c.graphicsRating);
+    if (comments.isEmpty) {
+      return 0.0;
+    }
+
+    final double total = comments.fold<double>(0.0, (
+      double sum,
+      GameCommentModel comment,
+    ) {
+      return sum + comment.graphicsRating;
+    });
+
     return total / comments.length;
   }
 
-  /// Promedio de Jugabilidad 
   double get averageGameplayRating {
-    if (comments.isEmpty) return 0.0;
-    final double total =
-        comments.fold<double>(0.0, (sum, c) => sum + c.gameplayRating);
+    if (comments.isEmpty) {
+      return 0.0;
+    }
+
+    final double total = comments.fold<double>(0.0, (
+      double sum,
+      GameCommentModel comment,
+    ) {
+      return sum + comment.gameplayRating;
+    });
+
     return total / comments.length;
   }
 
-  /// Promedio de Historia
   double get averageStoryRating {
-    if (comments.isEmpty) return 0.0;
-    final double total =
-        comments.fold<double>(0.0, (sum, c) => sum + c.storyRating);
+    if (comments.isEmpty) {
+      return 0.0;
+    }
+
+    final double total = comments.fold<double>(0.0, (
+      double sum,
+      GameCommentModel comment,
+    ) {
+      return sum + comment.storyRating;
+    });
+
     return total / comments.length;
   }
 
-  /// Promedio de Innovación 
   double get averageInnovationRating {
-    if (comments.isEmpty) return 0.0;
-    final double total =
-        comments.fold<double>(0.0, (sum, c) => sum + c.innovationRating);
+    if (comments.isEmpty) {
+      return 0.0;
+    }
+
+    final double total = comments.fold<double>(0.0, (
+      double sum,
+      GameCommentModel comment,
+    ) {
+      return sum + comment.innovationRating;
+    });
+
     return total / comments.length;
   }
 
-  /// Promedio General Global de la Comunidad 
   double get averageOverallRating {
-    if (comments.isEmpty) return rating; // 
-    final double overall = averageGraphicsRating +
+    if (comments.isEmpty) {
+      return rating;
+    }
+
+    final double overall =
+        averageGraphicsRating +
         averageGameplayRating +
         averageStoryRating +
         averageInnovationRating;
+
     return overall / 4.0;
   }
 
@@ -123,12 +162,14 @@ class GameDetailController extends GetxController {
 
   void toggleFavorite() {
     favoritesController.toggleFavorite(game);
+
     updateFavoriteStatus();
   }
 
   Future<void> loadGameDetail() async {
     try {
       isLoading.value = true;
+
       errorMessage.value = '';
 
       final Map<String, dynamic> response = await requestHandler
@@ -143,133 +184,253 @@ class GameDetailController extends GetxController {
   }
 
   Future<void> reload() async {
-    await loadGameDetail();
+    await Future.wait([loadGameDetail(), fetchRealPcPrice()]);
   }
-
 
   int get id {
     final dynamic value = detail['id'];
-    if (value is int) return value;
-    if (value is num) return value.toInt();
+
+    if (value is int) {
+      return value;
+    }
+
+    if (value is num) {
+      return value.toInt();
+    }
+
     return game.id;
   }
 
-  String get name => _stringValue(detail['name'], game.name);
-  String get slug => _stringValue(detail['slug'], '');
-
-  String get description {
-    final String descriptionRaw = _stringValue(detail['description_raw'], '');
-    if (descriptionRaw.isNotEmpty) return descriptionRaw;
-
-    final String descriptionHtml = _stringValue(detail['description'], '');
-    if (descriptionHtml.isNotEmpty) return _removeHtml(descriptionHtml);
-
-    return 'Sin descripción disponible.';
+  String get name {
+    return _stringValue(detail['name'], game.name);
   }
 
-  String get backgroundImage =>
-      _stringValue(detail['background_image'], game.backgroundImage);
+  String get description {
+    final String raw = _stringValue(detail['description_raw'], '');
 
-  String get backgroundImageAdditional =>
-      _stringValue(detail['background_image_additional'], '');
+    if (raw.isNotEmpty) {
+      return raw;
+    }
 
-  String get released => _stringValue(
-        detail['released'],
-        game.released.isNotEmpty ? game.released : 'Sin fecha',
-      );
+    final String normal = _stringValue(detail['description'], '');
 
-  bool get tba => detail['tba'] is bool ? detail['tba'] : false;
+    if (normal.isNotEmpty) {
+      return _removeHtml(normal);
+    }
 
-  double get rating => _doubleValue(detail['rating'], game.rating);
-  int get ratingTop => _intValue(detail['rating_top'], 5);
-  int get ratingsCount => _intValue(detail['ratings_count'], 0);
-  int get reviewsCount => _intValue(detail['reviews_count'], 0);
-  int get reviewsTextCount => _intValue(detail['reviews_text_count'], 0);
-  int get metacritic => _intValue(detail['metacritic'], 0);
-  int get playtime => _intValue(detail['playtime'], 0);
-  int get added => _intValue(detail['added'], 0);
-  int get suggestionsCount => _intValue(detail['suggestions_count'], 0);
-  String get website => _stringValue(detail['website'], '');
-  String get redditUrl => _stringValue(detail['reddit_url'], '');
-  String get redditName => _stringValue(detail['reddit_name'], '');
-  String get redditDescription => _stringValue(detail['reddit_description'], '');
-  String get metacriticUrl => _stringValue(detail['metacritic_url'], '');
+    return 'Sin descripcion disponible.';
+  }
+
+  String get backgroundImage {
+    return _stringValue(detail['background_image'], game.backgroundImage);
+  }
+
+  String get released {
+    return _stringValue(
+      detail['released'],
+      game.released.isNotEmpty ? game.released : 'Sin fecha',
+    );
+  }
+
+  double get rating {
+    return _doubleValue(detail['rating'], game.rating);
+  }
+
+  int get ratingTop {
+    return _intValue(detail['rating_top'], 5);
+  }
+
+  int get ratingsCount => 0;
+
+  int get reviewsCount => comments.length;
+
+  int get reviewsTextCount => comments.length;
+
+  int get metacritic => 0;
+
+  int get playtime {
+    return _intValue(detail['playtime'], 0);
+  }
+
+  int get added => 0;
+
+  int get suggestionsCount => 0;
 
   String get esrbRating {
     final dynamic value = detail['esrb_rating'];
+
     if (value is Map) {
-      return _stringValue(value['name'], 'Sin clasificación');
+      return _stringValue(value['name'], 'Sin clasificacion');
     }
-    return 'Sin clasificación';
+
+    final String direct = _stringValue(value, '');
+
+    if (direct.isNotEmpty) {
+      return direct;
+    }
+
+    return 'Sin clasificacion';
   }
 
   List<String> get genres {
     final List<String> apiGenres = _extractNames(detail['genres']);
-    return apiGenres.isNotEmpty ? apiGenres : game.genres;
+
+    if (apiGenres.isNotEmpty) {
+      return apiGenres;
+    }
+
+    return game.genres;
+  }
+
+  String get mainGenre {
+    if (genres.isEmpty) {
+      return 'Sin genero';
+    }
+
+    return genres.first;
   }
 
   List<String> get platforms {
     final dynamic value = detail['platforms'];
+
     if (value is List) {
       final List<String> result = [];
+
       for (final dynamic item in value) {
-        if (item is! Map) continue;
+        if (item is! Map) {
+          continue;
+        }
+
         final dynamic platform = item['platform'];
-        if (platform is! Map) continue;
+
+        if (platform is! Map) {
+          continue;
+        }
+
         final String platformName = _stringValue(platform['name'], '');
-        if (platformName.isNotEmpty) result.add(platformName);
+
+        if (platformName.isNotEmpty) {
+          result.add(platformName);
+        }
       }
-      if (result.isNotEmpty) return result;
+
+      if (result.isNotEmpty) {
+        return result;
+      }
     }
+
     return game.platforms;
   }
 
-  List<String> get parentPlatforms {
-    final dynamic value = detail['parent_platforms'];
-    if (value is! List) return [];
+  bool hasPlatform(String platformName) {
+    final String selected = platformName.toLowerCase();
 
-    final List<String> result = [];
-    for (final dynamic item in value) {
-      if (item is! Map) continue;
-      final dynamic platform = item['platform'];
-      if (platform is! Map) continue;
-      final String platformName = _stringValue(platform['name'], '');
-      if (platformName.isNotEmpty) result.add(platformName);
-    }
-    return result;
+    return platforms.any((String platform) {
+      final String current = platform.toLowerCase();
+
+      switch (selected) {
+        case 'pc':
+          return current == 'pc' || current.contains('windows');
+
+        case 'playstation':
+          return current.contains('playstation');
+
+        case 'xbox':
+          return current.contains('xbox');
+
+        case 'nintendo':
+          return current.contains('nintendo') || current.contains('switch');
+
+        default:
+          return current.contains(selected);
+      }
+    });
   }
 
-  List<String> get developers => _extractNames(detail['developers']);
-  List<String> get publishers => _extractNames(detail['publishers']);
-  List<String> get tags => _extractNames(detail['tags']);
-  List<Map<String, dynamic>> get ratings => _extractMaps(detail['ratings']);
-
-  List<Map<String, dynamic>> get stores {
-    final dynamic value = detail['stores'];
-    if (value is! List) return [];
-
-    final List<Map<String, dynamic>> result = [];
-    for (final dynamic item in value) {
-      if (item is! Map) continue;
-      final dynamic storeData = item['store'];
-      if (storeData is! Map) continue;
-
-      final int storeId = _intValue(storeData['id'], 0);
-      final String storeName = _stringValue(storeData['name'], 'Tienda');
-
-      result.add({
-        'id': storeData['id'],
-        'name': storeName,
-        'domain': _stringValue(storeData['domain'], ''),
-        'slug': _stringValue(storeData['slug'], ''),
-        'price': _priceForStore(storeName: storeName, storeId: storeId),
-      });
-    }
-    return result;
+  List<String> get developers {
+    return _extractNames(detail['developers']);
   }
 
-  /// Precios de mercado "normales" (tiers tipicos con los que se suele
-  /// vender un juego digital: 19.99, 29.99, 39.99, 49.99, 59.99, 69.99).
+  List<String> get publishers {
+    return _extractNames(detail['publishers']);
+  }
+
+  String get mainDeveloper {
+    if (developers.isEmpty) {
+      return 'Sin desarrollador';
+    }
+
+    return developers.first;
+  }
+
+  String get youtube {
+    return _stringValue(detail['youtube'], '');
+  }
+
+  bool get hasYoutube => youtube.isNotEmpty;
+
+  int get players {
+    return _intValue(detail['players'], 0);
+  }
+
+  String get coop {
+    return _stringValue(detail['coop'], '');
+  }
+
+  bool get hasCoop {
+    final String value = coop.trim().toLowerCase();
+
+    return value == 'yes' || value == 'true' || value == '1';
+  }
+
+  String get informationLine {
+    final List<String> values = [];
+
+    if (mainGenre != 'Sin genero') {
+      values.add(mainGenre);
+    }
+
+    if (mainDeveloper != 'Sin desarrollador') {
+      values.add(mainDeveloper);
+    }
+
+    if (released.isNotEmpty && released != 'Sin fecha') {
+      values.add(released);
+    }
+
+    if (values.isEmpty) {
+      return 'Informacion no disponible';
+    }
+
+    return values.join(' - ');
+  }
+
+  String get slug => '';
+
+  String get backgroundImageAdditional => '';
+
+  bool get tba => false;
+
+  String get website => '';
+
+  String get redditUrl => '';
+
+  String get redditName => '';
+
+  String get redditDescription => '';
+
+  String get metacriticUrl => '';
+
+  List<String> get parentPlatforms => [];
+
+  List<String> get tags => [];
+
+  List<Map<String, dynamic>> get ratings => [];
+
+  List<Map<String, dynamic>> get stores => [];
+
+  Map<String, String> get minimumRequirements => {};
+
   static const List<double> _marketTiers = [
     19.99,
     29.99,
@@ -279,46 +440,26 @@ class GameDetailController extends GetxController {
     69.99,
   ];
 
-  /// Redondea [price] hacia arriba al tier de mercado normal mas cercano.
   double _nearestMarketTier(double price) {
     for (final double tier in _marketTiers) {
-      if (tier >= price) return tier;
+      if (tier >= price) {
+        return tier;
+      }
     }
+
     return _marketTiers.last;
   }
 
-  /// Elige un tier de mercado normal de forma determinista segun [seed],
-  /// para cuando no hay un precio real de referencia.
   double _marketTierForSeed(int seed) {
     final int index = seed.abs() % _marketTiers.length;
+
     return _marketTiers[index];
   }
 
-  /// Precio para una tienda individual de la lista "Tiendas disponibles".
-  /// Steam usa el precio real de CheapShark si ya se cargo; el resto usa
-  /// un precio de mercado normal (anclado al real de PC si existe).
-  double _priceForStore({required String storeName, required int storeId}) {
-    final bool isSteam = storeName.toLowerCase().contains('steam');
-
-    if (isSteam && pcRealPrice.value != null) {
-      return pcRealPrice.value!;
-    }
-
-    if (pcRealPrice.value != null) {
-      return _nearestMarketTier(pcRealPrice.value!);
-    }
-
-    return _marketTierForSeed(id * 17 + storeId);
-  }
-
-  /// Precio para una plataforma (PC, PlayStation, Xbox, Nintendo).
-  /// PC usa el precio real de CheapShark cuando esta disponible; las
-  /// consolas siempre usan un precio de mercado normal (CheapShark no
-  /// cubre PlayStation Store, Xbox Store ni Nintendo eShop), anclado al
-  /// precio real de PC cuando se conoce. Retorna null si el juego no
-  /// esta disponible en esa plataforma.
   double? simulatedPriceForPlatform(String platformName) {
-    if (!hasPlatform(platformName)) return null;
+    if (!hasPlatform(platformName)) {
+      return null;
+    }
 
     final bool isPc = platformName.toLowerCase() == 'pc';
 
@@ -331,62 +472,9 @@ class GameDetailController extends GetxController {
     }
 
     final int seed = id * 31 + platformName.toLowerCase().hashCode;
+
     return _marketTierForSeed(seed);
   }
-
-  Map<String, String> get minimumRequirements {
-    final dynamic value = detail['platforms'];
-    if (value is! List) return {};
-
-    for (final dynamic item in value) {
-      if (item is! Map) continue;
-      final dynamic platform = item['platform'];
-      if (platform is! Map) continue;
-
-      final String platformName = _stringValue(platform['name'], '');
-      if (platformName.toLowerCase() != 'pc') continue;
-
-      final dynamic requirements = item['requirements_en'];
-      if (requirements is Map) {
-        return {
-          'minimum': _stringValue(
-            requirements['minimum'],
-            'Sin requisitos mínimos.',
-          ),
-          'recommended': _stringValue(
-            requirements['recommended'],
-            'Sin requisitos recomendados.',
-          ),
-        };
-      }
-    }
-    return {};
-  }
-
-  String get mainGenre => genres.isEmpty ? 'Sin género' : genres.first;
-  String get mainDeveloper => developers.isEmpty ? 'Sin desarrollador' : developers.first;
-  String get informationLine => [mainGenre, mainDeveloper, released].join(' - ');
-
-  bool hasPlatform(String platformName) {
-    final String selected = platformName.toLowerCase();
-    return platforms.any((String platform) {
-      final String current = platform.toLowerCase();
-      switch (selected) {
-        case 'pc':
-          return current == 'pc' || current.contains('windows');
-        case 'playstation':
-          return current.contains('playstation');
-        case 'xbox':
-          return current.contains('xbox');
-        case 'nintendo':
-          return current.contains('nintendo') || current.contains('switch');
-        default:
-          return false;
-      }
-    });
-  }
-
-  // --- SELECCIÓN DE EVALUACIONES ---
 
   void selectUserRating(double value) {
     if (value >= 0 && value <= 5) {
@@ -413,70 +501,89 @@ class GameDetailController extends GetxController {
   Future<void> saveRatingToFirebase() async {
     if (userRating.value <= 0) {
       Get.snackbar(
-        'Calificación',
-        'Selecciona una calificación.',
+        'Calificacion',
+        'Selecciona una calificacion.',
         snackPosition: SnackPosition.BOTTOM,
       );
+
       return;
     }
 
     Get.snackbar(
-      'Calificación guardada',
-      'Tu calificación fue registrada exitosamente.',
+      'Calificacion guardada',
+      'Tu calificacion fue registrada exitosamente.',
       snackPosition: SnackPosition.BOTTOM,
     );
   }
 
-  /// Publica el comentario junto a las 4 calificaciones multicriterio en Cloud Firestore
   Future<void> publishCommentToFirebase() async {
-    if (isSubmittingComment.value) return;
+    if (isSubmittingComment.value) {
+      return;
+    }
 
     final String text = commentController.text.trim();
 
     if (text.isEmpty) {
       Get.snackbar(
-        'Comentario vacío',
-        'Por favor escribe una opinión sobre el juego.',
+        'Comentario vacio',
+        'Por favor escribe una opinion sobre el juego.',
         snackPosition: SnackPosition.BOTTOM,
       );
+
       return;
     }
 
     try {
       isSubmittingComment.value = true;
+
       final User? user = _auth.currentUser;
 
-      final newComment = GameCommentModel(
+      final GameCommentModel newComment = GameCommentModel(
         gameId: game.id,
+
         userId: user?.uid ?? 'anonymous',
-        userName: user?.displayName ?? user?.email?.split('@')[0] ?? 'Usuario Gamer',
+
+        userName:
+            user?.displayName ??
+            user?.email?.split('@').first ??
+            'Usuario Gamer',
+
         userPhotoUrl: user?.photoURL ?? '',
+
         text: text,
+
         graphicsRating: graphicsRating.value,
+
         gameplayRating: gameplayRating.value,
+
         storyRating: storyRating.value,
+
         innovationRating: innovationRating.value,
+
         createdAt: DateTime.now(),
       );
 
       await _firestoreService.addComment(newComment);
 
-      // Limpieza
       commentController.clear();
+
       graphicsRating.value = 5.0;
+
       gameplayRating.value = 5.0;
+
       storyRating.value = 5.0;
+
       innovationRating.value = 5.0;
 
       Get.snackbar(
         'Comentario publicado',
-        'Tu evaluación ha sido registrada correctamente.',
+        'Tu evaluacion ha sido registrada correctamente.',
         snackPosition: SnackPosition.BOTTOM,
       );
-    } catch (e) {
+    } catch (error) {
       Get.snackbar(
         'Error',
-        'No se pudo publicar el comentario: $e',
+        'No se pudo publicar el comentario: $error',
         snackPosition: SnackPosition.BOTTOM,
       );
     } finally {
@@ -484,45 +591,61 @@ class GameDetailController extends GetxController {
     }
   }
 
-
   List<String> _extractNames(dynamic value) {
-    if (value is! List) return [];
-    final List<String> result = [];
-    for (final dynamic item in value) {
-      if (item is! Map) continue;
-      final String itemName = _stringValue(item['name'], '');
-      if (itemName.isNotEmpty) result.add(itemName);
+    if (value is! List) {
+      return [];
     }
-    return result;
-  }
 
-  List<Map<String, dynamic>> _extractMaps(dynamic value) {
-    if (value is! List) return [];
-    final List<Map<String, dynamic>> result = [];
+    final List<String> result = [];
+
     for (final dynamic item in value) {
-      if (item is Map<String, dynamic>) {
-        result.add(item);
-      } else if (item is Map) {
-        result.add(Map<String, dynamic>.from(item));
+      if (item is Map) {
+        final String itemName = _stringValue(item['name'], '');
+
+        if (itemName.isNotEmpty) {
+          result.add(itemName);
+        }
+
+        continue;
+      }
+
+      final String text = _stringValue(item, '');
+
+      if (text.isNotEmpty) {
+        result.add(text);
       }
     }
+
     return result;
   }
 
   int _intValue(dynamic value, int fallback) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
+    if (value is int) {
+      return value;
+    }
+
+    if (value is num) {
+      return value.toInt();
+    }
+
     return int.tryParse(value?.toString() ?? '') ?? fallback;
   }
 
   double _doubleValue(dynamic value, double fallback) {
-    if (value is num) return value.toDouble();
+    if (value is num) {
+      return value.toDouble();
+    }
+
     return double.tryParse(value?.toString() ?? '') ?? fallback;
   }
 
   String _stringValue(dynamic value, String fallback) {
     final String text = value?.toString().trim() ?? '';
-    if (text.isEmpty || text.toLowerCase() == 'null') return fallback;
+
+    if (text.isEmpty || text.toLowerCase() == 'null') {
+      return fallback;
+    }
+
     return text;
   }
 
@@ -539,6 +662,7 @@ class GameDetailController extends GetxController {
   @override
   void onClose() {
     commentController.dispose();
+
     super.onClose();
   }
 }

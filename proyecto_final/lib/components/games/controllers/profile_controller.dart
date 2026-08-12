@@ -1,62 +1,87 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 import '../views/login_view.dart';
 
 class ProfileController extends GetxController {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  var userName = ''.obs;
-  var userEmail = ''.obs;
-  var favoritesCount = 0.obs;
-  var reviewsCount = 0.obs;
-  var photoUrl = ''.obs;
+  final RxString userName = ''.obs;
+  final RxString userEmail = ''.obs;
+  final RxString photoUrl = ''.obs;
 
-  // Preferencias de Plataformas
-  var selectedPlatforms = <String>[].obs;
-  final availablePlatforms = ['pc', 'playstation', 'xbox', 'nintendo'];
+  final RxInt favoritesCount = 0.obs;
+  final RxInt reviewsCount = 0.obs;
 
-  var isLoading = true.obs;
-  var isLoadingImage = false.obs;
+  final RxList<String> selectedPlatforms = <String>[].obs;
+
+  final List<String> availablePlatforms = [
+    'pc',
+    'playstation',
+    'xbox',
+    'nintendo',
+  ];
+
+  final RxBool isLoading = true.obs;
+  final RxBool isLoadingImage = false.obs;
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _favoritesSubscription;
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _reviewsSubscription;
 
   @override
   void onInit() {
     super.onInit();
+
     loadUserProfile();
   }
 
-  /// Carga los datos del perfil desde Auth y Firestore
   Future<void> loadUserProfile() async {
     try {
       isLoading.value = true;
-      final currentUser = _auth.currentUser;
 
-      if (currentUser != null) {
-        userEmail.value = currentUser.email ?? '';
+      final User? currentUser = _auth.currentUser;
 
-        final userDoc = await _firestore
-            .collection('users')
-            .doc(currentUser.uid)
-            .get();
-
-        if (userDoc.exists && userDoc.data() != null) {
-          final data = userDoc.data()!;
-          userName.value = data['name'] ?? currentUser.displayName ?? 'Usuario';
-          photoUrl.value = data['photoUrl'] ?? '';
-
-          if (data['favorite_platforms'] != null) {
-            selectedPlatforms.assignAll(List<String>.from(data['favorite_platforms']));
-          }
-        } else {
-          userName.value = currentUser.displayName ?? 'Usuario';
-        }
-
-        await _loadCounts(currentUser.uid);
+      if (currentUser == null) {
+        return;
       }
+
+      userEmail.value = currentUser.email ?? '';
+
+      final DocumentSnapshot<Map<String, dynamic>> userDoc = await _firestore
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      if (userDoc.exists && userDoc.data() != null) {
+        final Map<String, dynamic> data = userDoc.data()!;
+
+        userName.value = data['name'] ?? currentUser.displayName ?? 'Usuario';
+
+        photoUrl.value = data['photoUrl'] ?? '';
+
+        if (data['favorite_platforms'] != null) {
+          selectedPlatforms.assignAll(
+            List<String>.from(data['favorite_platforms']),
+          );
+        }
+      } else {
+        userName.value = currentUser.displayName ?? 'Usuario';
+
+        photoUrl.value = '';
+
+        selectedPlatforms.clear();
+      }
+
+      _listenCounts(currentUser.uid);
     } catch (e) {
       Get.snackbar(
         'Error',
@@ -70,37 +95,48 @@ class ProfileController extends GetxController {
     }
   }
 
-  /// Carga los contadores de Favoritos y Reseñas
-  Future<void> _loadCounts(String userId) async {
-    try {
-      // Favoritos
-      final favsSnap = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('favorites')
-          .get();
-      favoritesCount.value = favsSnap.docs.length;
+  void _listenCounts(String userId) {
+    _favoritesSubscription?.cancel();
+    _reviewsSubscription?.cancel();
 
-      // Comentarios / Reseñas del usuario
-      final reviewsSnap = await _firestore
-          .collection('comments')
-          .where('userId', isEqualTo: userId)
-          .get();
-      reviewsCount.value = reviewsSnap.docs.length;
-    } catch (_) {
-      favoritesCount.value = 0;
-      reviewsCount.value = 0;
-    }
+    _favoritesSubscription = _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('favorites')
+        .snapshots()
+        .listen(
+          (QuerySnapshot<Map<String, dynamic>> snapshot) {
+            favoritesCount.value = snapshot.docs.length;
+          },
+          onError: (Object error) {
+            favoritesCount.value = 0;
+          },
+        );
+
+    _reviewsSubscription = _firestore
+        .collection('comments')
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .listen(
+          (QuerySnapshot<Map<String, dynamic>> snapshot) {
+            reviewsCount.value = snapshot.docs.length;
+          },
+          onError: (Object error) {
+            reviewsCount.value = 0;
+          },
+        );
   }
 
-  /// Selecciona una foto de la galería, la comprime y la guarda en Base64 en Firestore
   Future<void> pickAndUploadImage() async {
-    if (isLoadingImage.value) return;
+    if (isLoadingImage.value) {
+      return;
+    }
 
     try {
       isLoadingImage.value = true;
 
       final ImagePicker picker = ImagePicker();
+
       final XFile? image = await picker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 40,
@@ -109,18 +145,19 @@ class ProfileController extends GetxController {
       );
 
       if (image == null) {
-        isLoadingImage.value = false;
         return;
       }
 
-      final currentUser = _auth.currentUser;
+      final User? currentUser = _auth.currentUser;
+
       if (currentUser == null) {
-        isLoadingImage.value = false;
         return;
       }
 
-      final bytes = await image.readAsBytes();
-      final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      final List<int> bytes = await image.readAsBytes();
+
+      final String base64Image =
+          'data:image/jpeg;base64,${base64Encode(bytes)}';
 
       await _firestore.collection('users').doc(currentUser.uid).set({
         'photoUrl': base64Image,
@@ -148,7 +185,6 @@ class ProfileController extends GetxController {
     }
   }
 
-  /// Selector de plataformas favoritas
   void showPlatformsDialog() {
     final Map<String, IconData> availablePlatformsMap = {
       'pc': Icons.computer_rounded,
@@ -161,7 +197,7 @@ class ProfileController extends GetxController {
 
     Get.bottomSheet(
       StatefulBuilder(
-        builder: (context, setStateModal) {
+        builder: (BuildContext context, StateSetter setStateModal) {
           return Container(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
             decoration: const BoxDecoration(
@@ -171,7 +207,6 @@ class ProfileController extends GetxController {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Indicador superior 
                 Container(
                   width: 38,
                   height: 4,
@@ -180,9 +215,9 @@ class ProfileController extends GetxController {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
+
                 const SizedBox(height: 20),
 
-                // Título y Subtítulo
                 const Text(
                   'Plataformas Favoritas',
                   style: TextStyle(
@@ -191,14 +226,16 @@ class ProfileController extends GetxController {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+
                 const SizedBox(height: 6),
+
                 Text(
                   'Selecciona las plataformas donde sueles jugar',
                   style: TextStyle(color: Colors.grey[400], fontSize: 13),
                 ),
+
                 const SizedBox(height: 24),
 
-                // Tarjetas de Plataformas
                 GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -209,17 +246,21 @@ class ProfileController extends GetxController {
                     childAspectRatio: 2.2,
                   ),
                   itemCount: availablePlatformsMap.length,
-                  itemBuilder: (context, index) {
-                    final platformKey = availablePlatformsMap.keys.elementAt(index);
-                    final icon = availablePlatformsMap.values.elementAt(index);
-                    final isSelected = tempSelected.contains(platformKey);
+                  itemBuilder: (BuildContext context, int index) {
+                    final String platformKey = availablePlatformsMap.keys
+                        .elementAt(index);
+
+                    final IconData icon = availablePlatformsMap.values
+                        .elementAt(index);
+
+                    final bool isSelected = tempSelected.contains(platformKey);
 
                     return Material(
                       color: Colors.transparent,
                       child: InkWell(
                         onTap: () {
                           setStateModal(() {
-                            if (isSelected) {
+                            if (tempSelected.contains(platformKey)) {
                               tempSelected.remove(platformKey);
                             } else {
                               tempSelected.add(platformKey);
@@ -286,6 +327,7 @@ class ProfileController extends GetxController {
                     );
                   },
                 ),
+
                 const SizedBox(height: 28),
 
                 // Botones de Acción
@@ -302,11 +344,16 @@ class ProfileController extends GetxController {
                         ),
                         child: Text(
                           'Cancelar',
-                          style: TextStyle(color: Colors.grey[400], fontSize: 15),
+                          style: TextStyle(
+                            color: Colors.grey[400],
+                            fontSize: 15,
+                          ),
                         ),
                       ),
                     ),
+
                     const SizedBox(width: 12),
+
                     Expanded(
                       child: Container(
                         decoration: BoxDecoration(
@@ -318,16 +365,19 @@ class ProfileController extends GetxController {
                         child: ElevatedButton(
                           onPressed: () async {
                             selectedPlatforms.assignAll(tempSelected);
+
                             Get.back();
 
-                            final currentUser = _auth.currentUser;
+                            final User? currentUser = _auth.currentUser;
+
                             if (currentUser != null) {
                               await _firestore
                                   .collection('users')
                                   .doc(currentUser.uid)
                                   .set({
-                                'favorite_platforms': selectedPlatforms.toList(),
-                              }, SetOptions(merge: true));
+                                    'favorite_platforms': selectedPlatforms
+                                        .toList(),
+                                  }, SetOptions(merge: true));
                             }
 
                             Get.snackbar(
@@ -368,17 +418,24 @@ class ProfileController extends GetxController {
     );
   }
 
-  /// Cambio de nombre y Contraseña
   void showAccountConfigDialog() {
-    final nameController = TextEditingController(text: userName.value);
-    final currentPasswordController = TextEditingController();
-    final newPasswordController = TextEditingController();
-    final confirmPasswordController = TextEditingController();
+    final TextEditingController nameController = TextEditingController(
+      text: userName.value,
+    );
 
-    // ocultar/mostrar contraseña
-    final hideCurrentPass = true.obs;
-    final hideNewPass = true.obs;
-    final hideConfirmPass = true.obs;
+    final TextEditingController currentPasswordController =
+        TextEditingController();
+
+    final TextEditingController newPasswordController = TextEditingController();
+
+    final TextEditingController confirmPasswordController =
+        TextEditingController();
+
+    final RxBool hideCurrentPass = true.obs;
+
+    final RxBool hideNewPass = true.obs;
+
+    final RxBool hideConfirmPass = true.obs;
 
     Get.dialog(
       Dialog(
@@ -404,7 +461,6 @@ class ProfileController extends GetxController {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Cabecera: Título e Icono
                 Row(
                   children: [
                     Container(
@@ -435,19 +491,16 @@ class ProfileController extends GetxController {
                           SizedBox(height: 2),
                           Text(
                             'Actualiza tu información personal',
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 12,
-                            ),
+                            style: TextStyle(color: Colors.grey, fontSize: 12),
                           ),
                         ],
                       ),
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 24),
 
-                // Seccion 1: Nombre de Usuario
                 const Text(
                   'DATOS GENERALES',
                   style: TextStyle(
@@ -457,30 +510,38 @@ class ProfileController extends GetxController {
                     letterSpacing: 1.1,
                   ),
                 ),
+
                 const SizedBox(height: 10),
+
                 TextField(
                   controller: nameController,
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
                     labelText: 'Nombre de usuario',
                     labelStyle: TextStyle(color: Colors.grey[400]),
-                    prefixIcon: const Icon(Icons.person_outline_rounded, color: Colors.grey, size: 20),
+                    prefixIcon: const Icon(
+                      Icons.person_outline_rounded,
+                      color: Colors.grey,
+                      size: 20,
+                    ),
                     filled: true,
                     fillColor: const Color(0xFF222232),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
                       borderSide: const BorderSide(color: Colors.white12),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFF7C4DFF), width: 1.5),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF7C4DFF),
+                        width: 1.5,
+                      ),
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 24),
 
-                // Seccion 2: Seguridad (Contraseñas)
                 const Text(
                   'CAMBIAR CONTRASEÑA',
                   style: TextStyle(
@@ -490,220 +551,196 @@ class ProfileController extends GetxController {
                     letterSpacing: 1.1,
                   ),
                 ),
+
                 const SizedBox(height: 10),
 
-                // Contraseña actual
-                Obx(() => TextField(
-                  controller: currentPasswordController,
-                  obscureText: hideCurrentPass.value,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                  decoration: InputDecoration(
-                    labelText: 'Contraseña Actual',
-                    labelStyle: TextStyle(color: Colors.grey[400]),
-                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: Colors.grey, size: 20),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        hideCurrentPass.value ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                        color: Colors.grey,
-                        size: 20,
+                Obx(
+                  () => TextField(
+                    controller: currentPasswordController,
+                    obscureText: hideCurrentPass.value,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: 'Contraseña Actual',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          hideCurrentPass.value
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                        onPressed: () => hideCurrentPass.toggle(),
                       ),
-                      onPressed: () => hideCurrentPass.toggle(),
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFF222232),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Colors.white12),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFF7C4DFF), width: 1.5),
                     ),
                   ),
-                )),
+                ),
+
                 const SizedBox(height: 12),
 
-                // Nueva Contraseña
-                Obx(() => TextField(
-                  controller: newPasswordController,
-                  obscureText: hideNewPass.value,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                  decoration: InputDecoration(
-                    labelText: 'Nueva Contraseña',
-                    labelStyle: TextStyle(color: Colors.grey[400]),
-                    prefixIcon: const Icon(Icons.key_rounded, color: Colors.grey, size: 20),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        hideNewPass.value ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                        color: Colors.grey,
-                        size: 20,
+                Obx(
+                  () => TextField(
+                    controller: newPasswordController,
+                    obscureText: hideNewPass.value,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Nueva Contraseña',
+                      prefixIcon: const Icon(Icons.key_rounded),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          hideNewPass.value
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                        onPressed: () => hideNewPass.toggle(),
                       ),
-                      onPressed: () => hideNewPass.toggle(),
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFF222232),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Colors.white12),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFF7C4DFF), width: 1.5),
                     ),
                   ),
-                )),
+                ),
+
                 const SizedBox(height: 12),
 
-                // Confirmar Nueva Contraseña
-                Obx(() => TextField(
-                  controller: confirmPasswordController,
-                  obscureText: hideConfirmPass.value,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                  decoration: InputDecoration(
-                    labelText: 'Confirmar Nueva Contraseña',
-                    labelStyle: TextStyle(color: Colors.grey[400]),
-                    prefixIcon: const Icon(Icons.check_circle_outline_rounded, color: Colors.grey, size: 20),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        hideConfirmPass.value ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                        color: Colors.grey,
-                        size: 20,
+                Obx(
+                  () => TextField(
+                    controller: confirmPasswordController,
+                    obscureText: hideConfirmPass.value,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Confirmar Nueva Contraseña',
+                      prefixIcon: const Icon(
+                        Icons.check_circle_outline_rounded,
                       ),
-                      onPressed: () => hideConfirmPass.toggle(),
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFF222232),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Colors.white12),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFF7C4DFF), width: 1.5),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          hideConfirmPass.value
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                        onPressed: () => hideConfirmPass.toggle(),
+                      ),
                     ),
                   ),
-                )),
+                ),
+
                 const SizedBox(height: 28),
 
-                // Botones de Acción
                 Row(
                   children: [
                     Expanded(
                       child: TextButton(
                         onPressed: () => Get.back(),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          'Cancelar',
-                          style: TextStyle(color: Colors.grey[400], fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
+                        child: const Text('Cancelar'),
                       ),
                     ),
+
                     const SizedBox(width: 12),
+
                     Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF7C4DFF), Color(0xFF651FFF)],
-                          ),
-                        ),
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            final newName = nameController.text.trim();
-                            final currentPass = currentPasswordController.text.trim();
-                            final newPass = newPasswordController.text.trim();
-                            final confirmPass = confirmPasswordController.text.trim();
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          final String newName = nameController.text.trim();
 
-                            final currentUser = _auth.currentUser;
-                            if (currentUser == null) return;
+                          final String currentPass = currentPasswordController
+                              .text
+                              .trim();
 
-                            try {
-                              // Actualizar Nombre de Usuario
-                              if (newName.isNotEmpty && newName != userName.value) {
-                                await currentUser.updateDisplayName(newName);
-                                await _firestore.collection('users').doc(currentUser.uid).set({
-                                  'name': newName,
-                                }, SetOptions(merge: true));
-                                userName.value = newName;
-                              }
+                          final String newPass = newPasswordController.text
+                              .trim();
 
-                              // Procesar Cambio de Contraseña
-                              if (currentPass.isNotEmpty || newPass.isNotEmpty || confirmPass.isNotEmpty) {
-                                if (newPass != confirmPass) {
-                                  Get.snackbar(
-                                    'Error',
-                                    'Las nuevas contraseñas no coinciden',
-                                    snackPosition: SnackPosition.BOTTOM,
-                                    backgroundColor: Colors.redAccent,
-                                    colorText: Colors.white,
-                                  );
-                                  return;
-                                }
+                          final String confirmPass = confirmPasswordController
+                              .text
+                              .trim();
 
-                                if (newPass.length < 6) {
-                                  Get.snackbar(
-                                    'Error',
-                                    'La nueva contraseña debe tener al menos 6 caracteres',
-                                    snackPosition: SnackPosition.BOTTOM,
-                                    backgroundColor: Colors.redAccent,
-                                    colorText: Colors.white,
-                                  );
-                                  return;
-                                }
+                          final User? currentUser = _auth.currentUser;
 
-                                // Reautenticar al usuario
-                                AuthCredential credential = EmailAuthProvider.credential(
-                                  email: currentUser.email!,
-                                  password: currentPass,
-                                );
+                          if (currentUser == null) {
+                            return;
+                          }
 
-                                await currentUser.reauthenticateWithCredential(credential);
-                                await currentUser.updatePassword(newPass);
-                              }
+                          try {
+                            if (newName.isNotEmpty &&
+                                newName != userName.value) {
+                              await currentUser.updateDisplayName(newName);
 
-                              Get.back();
-                              Get.snackbar(
-                                'Éxito',
-                                'Perfil actualizado correctamente',
-                                snackPosition: SnackPosition.BOTTOM,
-                                backgroundColor: Colors.green,
-                                colorText: Colors.white,
-                              );
-                            } catch (e) {
-                              Get.snackbar(
-                                'Error',
-                                'Error al actualizar: Contraseña actual incorrecta o credencial inválida',
-                                snackPosition: SnackPosition.BOTTOM,
-                                backgroundColor: Colors.redAccent,
-                                colorText: Colors.white,
-                              );
+                              await _firestore
+                                  .collection('users')
+                                  .doc(currentUser.uid)
+                                  .set({
+                                    'name': newName,
+                                  }, SetOptions(merge: true));
+
+                              userName.value = newName;
                             }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text(
-                            'Guardar',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
+
+                            final bool wantsPasswordChange =
+                                currentPass.isNotEmpty ||
+                                newPass.isNotEmpty ||
+                                confirmPass.isNotEmpty;
+
+                            if (wantsPasswordChange) {
+                              if (currentPass.isEmpty) {
+                                Get.snackbar(
+                                  'Error',
+                                  'Ingresa tu contraseña actual',
+                                );
+                                return;
+                              }
+
+                              if (newPass != confirmPass) {
+                                Get.snackbar(
+                                  'Error',
+                                  'Las nuevas contraseñas no coinciden',
+                                );
+                                return;
+                              }
+
+                              if (newPass.length < 6) {
+                                Get.snackbar(
+                                  'Error',
+                                  'La nueva contraseña debe tener al menos 6 caracteres',
+                                );
+                                return;
+                              }
+
+                              if (currentUser.email == null) {
+                                Get.snackbar(
+                                  'Error',
+                                  'Esta cuenta no tiene correo disponible',
+                                );
+                                return;
+                              }
+
+                              final AuthCredential credential =
+                                  EmailAuthProvider.credential(
+                                    email: currentUser.email!,
+                                    password: currentPass,
+                                  );
+
+                              await currentUser.reauthenticateWithCredential(
+                                credential,
+                              );
+
+                              await currentUser.updatePassword(newPass);
+                            }
+
+                            Get.back();
+
+                            Get.snackbar(
+                              'Éxito',
+                              'Perfil actualizado correctamente',
+                              snackPosition: SnackPosition.BOTTOM,
+                              backgroundColor: Colors.green,
+                              colorText: Colors.white,
+                            );
+                          } catch (e) {
+                            Get.snackbar(
+                              'Error',
+                              'Error al actualizar: Contraseña actual incorrecta o credencial inválida',
+                              snackPosition: SnackPosition.BOTTOM,
+                              backgroundColor: Colors.redAccent,
+                              colorText: Colors.white,
+                            );
+                          }
+                        },
+                        child: const Text('Guardar'),
                       ),
                     ),
                   ],
@@ -719,10 +756,33 @@ class ProfileController extends GetxController {
   /// Cierra la sesión
   Future<void> logout() async {
     try {
+      // Cancelamos los listeners antes
+      // de cerrar la sesión.
+      await _favoritesSubscription?.cancel();
+
+      await _reviewsSubscription?.cancel();
+
+      _favoritesSubscription = null;
+
+      _reviewsSubscription = null;
+
+      favoritesCount.value = 0;
+      reviewsCount.value = 0;
+
       await _auth.signOut();
+
       Get.offAll(() => const LoginView());
     } catch (e) {
-      print("Error al cerrar sesión: $e");
+      debugPrint('Error al cerrar sesión: $e');
     }
+  }
+
+  @override
+  void onClose() {
+    _favoritesSubscription?.cancel();
+
+    _reviewsSubscription?.cancel();
+
+    super.onClose();
   }
 }

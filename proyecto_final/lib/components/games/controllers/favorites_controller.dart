@@ -16,7 +16,7 @@ class FavoritesController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    // cambios de autenticación
+
     _authSubscription = _auth.authStateChanges().listen((User? user) {
       if (user != null) {
         _listenToFavorites(user.uid);
@@ -27,7 +27,6 @@ class FavoritesController extends GetxController {
     });
   }
 
-
   void _listenToFavorites(String userId) {
     _favoritesSubscription?.cancel();
 
@@ -37,28 +36,26 @@ class FavoritesController extends GetxController {
         .collection('favorites')
         .snapshots()
         .listen(
-      (snapshot) {
-        final List<GameModel> loaded = snapshot.docs.map((doc) {
-          final data = doc.data();
-          return GameModel.fromJson(data);
-        }).toList();
+          (snapshot) {
+            final List<GameModel> loaded = snapshot.docs.map((doc) {
+              final data = doc.data();
+              return GameModel.fromJson(data);
+            }).toList();
 
-        favoriteGames.assignAll(loaded);
-      },
-      onError: (error) {
-        Get.snackbar(
-          'Error',
-          'No se pudieron cargar los favoritos: $error',
-          snackPosition: SnackPosition.BOTTOM,
+            favoriteGames.assignAll(loaded);
+          },
+          onError: (error) {
+            Get.snackbar(
+              'Error',
+              'No se pudieron cargar los favoritos: $error',
+              snackPosition: SnackPosition.BOTTOM,
+            );
+          },
         );
-      },
-    );
   }
 
   bool isFavorite(int gameId) {
-    return favoriteGames.any(
-      (GameModel game) => game.id == gameId,
-    );
+    return favoriteGames.any((GameModel game) => game.id == gameId);
   }
 
   void toggleFavorite(GameModel game) {
@@ -96,10 +93,7 @@ class FavoritesController extends GetxController {
       }
     }
 
-
-    favoriteGames.removeWhere(
-      (GameModel game) => game.id == gameId,
-    );
+    favoriteGames.removeWhere((GameModel game) => game.id == gameId);
 
     if (removedGame != null) {
       Get.snackbar(
