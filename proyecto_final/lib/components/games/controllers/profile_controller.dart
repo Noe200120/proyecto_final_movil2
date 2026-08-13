@@ -32,6 +32,8 @@ class ProfileController extends GetxController {
   final RxBool isLoading = true.obs;
   final RxBool isLoadingImage = false.obs;
 
+  StreamSubscription<User?>? _authSubscription;
+
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _favoritesSubscription;
 
@@ -40,6 +42,13 @@ class ProfileController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+
+    // Escucha cuando el usuario vuelve a iniciar sesión para recargar sus datos y contadores
+    _authSubscription = _auth.authStateChanges().listen((User? user) {
+      if (user != null) {
+        loadUserProfile();
+      }
+    });
 
     loadUserProfile();
   }
@@ -330,7 +339,6 @@ class ProfileController extends GetxController {
 
                 const SizedBox(height: 28),
 
-                // Botones de Acción
                 Row(
                   children: [
                     Expanded(
@@ -753,11 +761,8 @@ class ProfileController extends GetxController {
     );
   }
 
-  /// Cierra la sesión
   Future<void> logout() async {
     try {
-      // Cancelamos los listeners antes
-      // de cerrar la sesión.
       await _favoritesSubscription?.cancel();
 
       await _reviewsSubscription?.cancel();
@@ -779,6 +784,8 @@ class ProfileController extends GetxController {
 
   @override
   void onClose() {
+    _authSubscription?.cancel();
+
     _favoritesSubscription?.cancel();
 
     _reviewsSubscription?.cancel();
